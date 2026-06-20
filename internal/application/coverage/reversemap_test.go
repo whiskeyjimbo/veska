@@ -149,7 +149,7 @@ func TestCyclesTerminate(t *testing.T) {
 func TestMaxNodesValve(t *testing.T) {
 	// A long helper chain longer than the valve; the test entrypoint sits past
 	// the budget, so it is (safely) not reached - the valve trades recall for a
-	// bound, the documented behaviour.
+	// bound, the documented behavior.
 	r := &fakeReader{inbound: map[string][]ports.NodeRef{
 		"prod": {fn("h1", "helper1", "x_test.go")},
 		"h1":   {fn("h2", "helper2", "x_test.go")},

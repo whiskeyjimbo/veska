@@ -34,7 +34,7 @@ type CycleGroup struct {
 
 // CycleVerdict is the cycle gate's pass/fail result. Unlike the clone gate this
 // gate has no degraded "unchecked" mode: the after- and base-state dependency
-// graphs are always materialisable from the (cloned) base graph, so
+// graphs are always materializable from the (cloned) base graph, so
 // Pass == (len(NewCycles) == 0).
 type CycleVerdict struct {
 	Pass      bool         `json:"pass"`

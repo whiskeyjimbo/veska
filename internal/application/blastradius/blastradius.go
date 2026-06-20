@@ -94,7 +94,7 @@ type Entry struct {
 	// Empty when the underlying node row has no snippet
 	// (legacy rows before the column was added).
 	Snippet string
-	// IsHub is true when this node's neighbour count exceeded
+	// IsHub is true when this node's neighbor count exceeded
 	// HubDegreeThreshold and BFS skipped expanding through it. The node
 	// is still reported (its presence in the blast radius is real) but
 	// its further fan-out was suppressed to avoid drowning the result in
@@ -112,7 +112,7 @@ type Entry struct {
 // Response is the envelope returned by Service.Of and friends.
 type Response struct {
 	// Entries are ordered by BFS distance, then by the order in which the
-	// underlying EdgeReader returned the neighbour. Seeds appear first.
+	// underlying EdgeReader returned the neighbor. Seeds appear first.
 	Entries []Entry
 	// Truncated is true when traversal stopped because MaxNodes was hit
 	// (rather than naturally exhausting reachable nodes).
@@ -143,7 +143,7 @@ type Service struct {
 type ServiceOption func(*Service)
 
 // WithDefaultHubDegreeThreshold overrides the hub-degree threshold used when a
-// per-call Options leaves HubDegreeThreshold at 0. Any value is honoured,
+// per-call Options leaves HubDegreeThreshold at 0. Any value is honored,
 // including a negative one (which disables the hub gate) - the daemon threads
 // the operator-configured blast.hub_degree_threshold through here.
 func WithDefaultHubDegreeThreshold(n int) ServiceOption {
@@ -172,7 +172,7 @@ type Options struct {
 	MaxDepth  int
 	MaxNodes  int
 	Direction Direction
-	// HubDegreeThreshold: nodes whose neighbour count (in the configured
+	// HubDegreeThreshold: nodes whose neighbor count (in the configured
 	// direction) exceeds this value act as hubs and are NOT expanded
 	// through during BFS. They are still included in the result (with
 	// IsHub=true) so callers see the structural fact; what's excluded is
@@ -184,7 +184,7 @@ type Options struct {
 	// drowning the real risk signal. Generalises to mux/gin/echo/chi
 	// routers and any other "central registry" pattern.
 	// 0 (default) → use DefaultHubDegreeThreshold. <0 disables the gate
-	// (legacy behaviour: expand through everything).
+	// (legacy behavior: expand through everything).
 	HubDegreeThreshold int
 }
 
@@ -222,7 +222,7 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 
 	// Seed validation: if NONE of the supplied seed_ids resolve to a real
 	// node in (repoID, branch), that's a user error - the radius is
-	// undefined, and the historical behaviour of returning a single entry
+	// undefined, and the historical behavior of returning a single entry
 	// with empty name/kind/file_path silently masked it. A
 	// partial miss is still tolerated: downstream BFS entries may be
 	// eventually-consistent (the comment further down still applies), but
@@ -338,10 +338,10 @@ func (s *Service) Of(ctx context.Context, repoID, branch string, seedIDs []strin
 	return Response{Entries: entries, Truncated: truncated}, nil
 }
 
-// expandPerSource is expand's sibling that preserves per-source neighbour
+// expandPerSource is expand's sibling that preserves per-source neighbor
 // lists so the BFS caller can gate expansion node-by-node (
-// hub-degree threshold). Behaviour is otherwise identical to expand: the
-// union of in/outbound neighbours per the configured direction.
+// hub-degree threshold). Behavior is otherwise identical to expand: the
+// union of in/outbound neighbors per the configured direction.
 func (s *Service) expandPerSource(ctx context.Context, repoID, branch string, frontier []string, dir Direction) (map[string][]string, error) {
 	out := make(map[string][]string, len(frontier))
 	if dir == DirCallers || dir == DirBoth {
@@ -435,7 +435,7 @@ func (s *Service) DiffOf(ctx context.Context, repoID, branch, repoRoot string, c
 // staged node's parser-computed ContentHash against the promoted side's
 // stored hash, filtering out unchanged-but-restaged symbols.
 // *sqlite.NodeLookupRepo satisfies it; stubs that don't simply skip the
-// filter, preserving the prior "every staged node is dirty" behaviour.
+// filter, preserving the prior "every staged node is dirty" behavior.
 type ContentHasher interface {
 	NodeContentHash(ctx context.Context, repoID, branch, nodeID string) (string, error)
 }
@@ -446,14 +446,14 @@ type ContentHasher interface {
 // Staged nodes are not themselves in the edges table (edges are written
 // only at promotion time), so the BFS expands them via inbound edges
 // only - answering "who currently calls things I am about to change".
-// The direction option is honoured but the canonical use is callers.
+// The direction option is honored but the canonical use is callers.
 // a re-parse stages every symbol in a file regardless of
 // whether the symbol body actually changed. To avoid claiming the whole
 // file is dirty for a comment-only edit, the seed set is filtered: a
 // staged node whose parser-computed ContentHash matches the promoted
 // content_hash for the same node_id is unchanged and contributes no
 // seed. Filtering requires the optional ContentHasher capability; when
-// the lookup adapter doesn't implement it, behaviour falls back to the
+// the lookup adapter doesn't implement it, behavior falls back to the
 // prior "every staged node is a seed" semantics.
 func (s *Service) DirtyOf(ctx context.Context, repoID, branch string, opts Options) (Response, error) {
 	if s.staging == nil {

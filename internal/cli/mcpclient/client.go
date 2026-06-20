@@ -30,7 +30,7 @@ const (
 	dialAttempts = 3
 	// ioTimeout is generous: the first call after `veska service start` (cold
 	// daemon) can take ~10s as SQLite opens, the embedder hot-loads, and
-	// registries initialise. 30s absorbs that cold-start jitter while staying
+	// registries initialize. 30s absorbs that cold-start jitter while staying
 	// within human patience for a one-shot CLI call.
 	ioTimeout = 30 * time.Second
 )

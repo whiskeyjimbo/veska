@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// This file LOCKS the untested-symbol gate's CALLS-edge proxy behaviour on Go
+// This file LOCKS the untested-symbol gate's CALLS-edge proxy behavior on Go
 // idioms that exercise a prod symbol WITHOUT a direct static CALLS edge from a
 // test file (probed in ). Each test modifies a prod symbol that IS
 // exercised by a test via the named idiom and asserts the CURRENT gate verdict,

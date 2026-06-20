@@ -37,7 +37,7 @@ func checkVulnProvider(cfg config.Config) error {
 // An empty [vuln_source] provider yields the NullVulnSource with enabled
 // false - no refresher goroutine, no vulnscan check. provider = "osv" yields
 // the OSV.dev-backed adapter with enabled true. The caller is expected to have
-// run checkVulnProvider first, so an unrecognised provider also falls back to
+// run checkVulnProvider first, so an unrecognized provider also falls back to
 // the NullVulnSource here rather than panicking.
 func buildVulnSource(cfg config.Config) (ports.VulnSource, bool) {
 	return composition.BuildVulnSource(cfg)

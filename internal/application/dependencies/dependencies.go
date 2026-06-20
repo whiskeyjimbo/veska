@@ -157,7 +157,7 @@ func WithImportLister(l ImportLister) ServiceOption {
 // is absent.
 type OwnModulePathFunc func(ctx context.Context, repoRoot string) (string, error)
 
-// WithOwnModulePath supplies the func used to recognise the repo's own
+// WithOwnModulePath supplies the func used to recognize the repo's own
 // module path. Without it the "external" dependency list ends up including
 // the repo's internal subpackages (anything inside its module tree),
 // which is misleading in `veska deps list` output.

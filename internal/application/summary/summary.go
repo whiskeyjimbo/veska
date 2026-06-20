@@ -16,7 +16,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-// Node is the minimal projection the summary lane needs to summarise one
+// Node is the minimal projection the summary lane needs to summarize one
 // promoted node. RawContent is not persisted on nodes, so the handler slices
 // the node's body out of the on-disk file using LineStart/LineEnd.
 type Node struct {
@@ -28,11 +28,11 @@ type Node struct {
 	LineEnd   int
 }
 
-// Store loads the summarisable nodes of a promoted file and persists their
+// Store loads the summarizable nodes of a promoted file and persists their
 // generated summaries. It is consumer-owned (ISP): sized to exactly what the
 // handler needs, implemented by sqlite.SummaryStore.
 type Store interface {
-	// PromotedNodes returns the summarisable nodes for filePath on the given
+	// PromotedNodes returns the summarizable nodes for filePath on the given
 	// repo/branch, excluding container/sub-symbol kinds the projection hides.
 	PromotedNodes(ctx context.Context, repoID, branch, filePath string) ([]Node, error)
 	// SetShortSummary persists summary (already bounded to
@@ -64,8 +64,8 @@ var excludedKinds = map[string]struct{}{
 	string(domain.KindField):   {},
 }
 
-// summarisable reports whether a node kind should receive an LLM summary.
-func summarisable(kind string) bool {
+// summarizable reports whether a node kind should receive an LLM summary.
+func summarizable(kind string) bool {
 	_, excluded := excludedKinds[kind]
 	return !excluded
 }

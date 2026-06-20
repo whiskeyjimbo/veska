@@ -472,7 +472,7 @@ func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
 // buildWikiHandler wires the WorkKindWiki regeneration handler (hot_zone +
 // entry_points pages) via the shared composition constructor. The daemon shares
 // its live staging so blast radius sees in-flight nodes, resolves repo roots
-// through the repos table, and honours the [wiki] write_pages config.
+// through the repos table, and honors the [wiki] write_pages config.
 func (b *daemonBuilder) buildWikiHandler() (*wiki.Handler, error) {
 	return composition.NewWikiHandler(b.pools, b.staging, repoRootFunc(b.pools.ReadDB), composition.WithWritePages(b.fileCfg.Wiki.WritePages))
 }

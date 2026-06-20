@@ -57,7 +57,7 @@ func (w *FSWatcher) Put(path string, e MtimeEntry) {
 }
 
 // refreshBaseline updates the shared baseline for the specified path to match its current on-disk state.
-// It returns false if the context has been cancelled, preventing stale updates after the watcher is stopped.
+// It returns false if the context has been canceled, preventing stale updates after the watcher is stopped.
 func (w *FSWatcher) refreshBaseline(ctx context.Context, path string) bool {
 	if ctx.Err() != nil {
 		return false
@@ -71,7 +71,7 @@ func (w *FSWatcher) refreshBaseline(ctx context.Context, path string) bool {
 }
 
 // Watch registers the directory tree for change events, returning a channel on which file events
-// are delivered. The channel is closed when the context is cancelled or Close is called.
+// are delivered. The channel is closed when the context is canceled or Close is called.
 func (w *FSWatcher) Watch(ctx context.Context, dir string) (<-chan ports.FileEvent, error) {
 	// Recursively add all subdirectories to the watcher.
 	if err := w.addTree(dir); err != nil {
@@ -165,7 +165,7 @@ func (w *FSWatcher) run(ctx context.Context, dir string, out chan<- ports.FileEv
 		emit(ports.FileEvent{Path: name, Op: ports.WatchOpWrite})
 	}
 
-	// Loop until the context is cancelled or the fsnotify channels close.
+	// Loop until the context is canceled or the fsnotify channels close.
 	for {
 		select {
 		case <-ctx.Done():

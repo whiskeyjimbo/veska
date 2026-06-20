@@ -139,7 +139,7 @@ func renderEmptyChain(w io.Writer, env graphChainEnv) {
 				len(env.IndexingRepos), strings.Join(env.IndexingRepos, ", "))
 		case "chained_selectors_unresolved":
 			fmt.Fprintln(w, "  hint: parser can't resolve chained selector expressions (e.g. rootCmd.AddCommand(...).Execute()),")
-			fmt.Fprintln(w, "        so call edges from cobra-style top-level var initialisers are attributed to the package node.")
+			fmt.Fprintln(w, "        so call edges from cobra-style top-level var initializers are attributed to the package node.")
 			fmt.Fprintln(w, "        try `veska blast <symbol>` or `veska context <symbol>` for a graph-wide view.")
 		case "external_callees_only":
 			fmt.Fprintln(w, "  hint: this symbol only calls into stdlib or unregistered modules, so there are no")
@@ -183,8 +183,8 @@ func renderChainCrossRepoEdges(ctx context.Context, w io.Writer, env graphChainE
 	if anyPackageSrc {
 		// cross-repo CALLS landing on a `package` src usually
 		// means the call lives inside an anonymous function in a top-level var
-		// initialiser (e.g. cobra's `Run: func(.){.}`).
-		fmt.Fprintln(w, "  note: package-grain src means the caller is an anonymous func in a top-level var initialiser (e.g. cobra Run/RunE).")
+		// initializer (e.g. cobra's `Run: func(.){.}`).
+		fmt.Fprintln(w, "  note: package-grain src means the caller is an anonymous func in a top-level var initializer (e.g. cobra Run/RunE).")
 		fmt.Fprintln(w, "        run `veska context <caller-symbol>` or grep that file for the dst symbol to pinpoint the call site.")
 	}
 }

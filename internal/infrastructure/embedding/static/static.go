@@ -12,7 +12,7 @@
 //  3. Hash each n-gram to a Dim-length float32 vector via SHA-256
 //     expansion mapped into [-1, 1].
 //  4. Sum all n-gram vectors across all tokens; divide by count
-//     (mean-pool); L2-normalise.
+//     (mean-pool); L2-normalize.
 //
 // This is NOT a faithful Model2Vec / potion-code-16M port; that work
 // is implemented in the model2vec package and requires a HuggingFace tokenizer and
@@ -71,8 +71,8 @@ func New() (*Provider, error) {
 // ModelID returns the stable identifier of the embedding model in use.
 func (*Provider) ModelID() string { return ModelID }
 
-// Embed returns a deterministic L2-normalised vector for text.
-// Empty / whitespace-only input still returns a finite normalised
+// Embed returns a deterministic L2-normalized vector for text.
+// Empty / whitespace-only input still returns a finite normalized
 // vector (the empty-string hash) so callers don't have to special-case
 // a NaN result.
 func (*Provider) Embed(_ context.Context, text string) ([]float32, error) {

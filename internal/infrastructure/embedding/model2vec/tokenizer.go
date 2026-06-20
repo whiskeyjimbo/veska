@@ -25,7 +25,7 @@ type tokenizer struct {
 	unk              int
 	maxCharsPerWord  int
 
-	// normaliser flags from BertNormalizer config.
+	// normalizer flags from BertNormalizer config.
 	lowercase    bool
 	stripAccents bool
 }
@@ -92,7 +92,7 @@ func newTokenizer(jsonBytes []byte) (*tokenizer, error) {
 
 	// BertNormalizer config is optional - older tokenizer.json variants
 	// omit the section entirely. Default to lowercase=true to match
-	// the dominant bge-* base behaviour.
+	// the dominant bge-* base behavior.
 	if len(spec.Normalizer) > 0 {
 		var n bertNormalizerCfg
 		if err := json.Unmarshal(spec.Normalizer, &n); err != nil {
@@ -108,10 +108,10 @@ func newTokenizer(jsonBytes []byte) (*tokenizer, error) {
 
 func (t *tokenizer) unkID() int { return t.unk }
 
-// encode normalises text, splits via BertPreTokenizer rules (whitespace
+// encode normalizes text, splits via BertPreTokenizer rules (whitespace
 // + punctuation), and emits WordPiece IDs.
 func (t *tokenizer) encode(text string) []int {
-	text = t.normalise(text)
+	text = t.normalize(text)
 	words := bertPreTokenize(text)
 	if len(words) == 0 {
 		return nil
@@ -126,12 +126,12 @@ func (t *tokenizer) encode(text string) []int {
 	return out
 }
 
-// normalise applies the BertNormalizer steps we care about: lowercase
+// normalize applies the BertNormalizer steps we care about: lowercase
 // (cheap, language-agnostic) and accent-stripping (decompose to NFD
 // and drop combining marks). clean_text + handle_chinese_chars are
 // out of scope; they affect punctuation surface but not the IDs that
 // land in the embedding lookup for typical English/code input.
-func (t *tokenizer) normalise(s string) string {
+func (t *tokenizer) normalize(s string) string {
 	if t.lowercase {
 		s = strings.ToLower(s)
 	}
@@ -151,7 +151,7 @@ func (t *tokenizer) normalise(s string) string {
 
 // bertPreTokenize splits on whitespace AND on punctuation, with each
 // punctuation char becoming its own token. Matches the BertPreTokenizer
-// behaviour HuggingFace ships.
+// behavior HuggingFace ships.
 func bertPreTokenize(s string) []string {
 	var out []string
 	var cur strings.Builder

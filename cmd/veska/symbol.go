@@ -70,7 +70,7 @@ func contextCmd() *cobra.Command {
 		Use:   "context <symbol>",
 		Short: "Bundle a symbol with its callers/callees/tests (wraps eng_get_context_pack)",
 		// Long reuses the MCP DescContextPack fragment (shared purpose +
-		// cross-repo behaviour, both true for the CLI) so it can't drift from
+		// cross-repo behavior, both true for the CLI) so it can't drift from
 		// the eng_get_context_pack description. The MCP-only anchor prose
 		// (node_id/task_id) is intentionally NOT shared - `veska context`
 		// takes only a symbol.

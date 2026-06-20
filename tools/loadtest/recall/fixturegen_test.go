@@ -88,10 +88,10 @@ func TestGenerateOllamaFixture_WritesRoundTrippableFile(t *testing.T) {
 		t.Fatalf("progress: expected final call equal to total, got %v", progressCalls)
 	}
 
-	// Vector body round-trips. The generator L2-normalises every vector
+	// Vector body round-trips. The generator L2-normalizes every vector
 	// before writing, so the stored value is the unit
 	// form of the stub's raw {text[0], i, 0.}. Verify each stored vector
-	// is unit-norm and matches the expected normalised first element.
+	// is unit-norm and matches the expected normalized first element.
 	for i, n := range corpus.Nodes {
 		// stubProvider sets v[0]=text[0] and v[1]=callIndex (1-based), so
 		// node i was the (i+1)-th Embed call.
@@ -107,7 +107,7 @@ func TestGenerateOllamaFixture_WritesRoundTrippableFile(t *testing.T) {
 			t.Errorf("vec[%d] not unit-norm: |v|=%v", i, gotNorm)
 		}
 		if want := float32(raw0 / rawNorm); math.Abs(float64(vecs[i*dim]-want)) > 1e-5 {
-			t.Errorf("vec[%d][0]=%v want %v (normalised)", i, vecs[i*dim], want)
+			t.Errorf("vec[%d][0]=%v want %v (normalized)", i, vecs[i*dim], want)
 		}
 	}
 }
@@ -192,7 +192,7 @@ func TestGenerateOllamaFixture_HTTPStub(t *testing.T) {
 
 	// Ensure distinct vectors came through. The stub points each request
 	// along a different axis, so the full per-node vectors must differ
-	// even after the generator L2-normalises them.
+	// even after the generator L2-normalizes them.
 	seen := make(map[string]struct{})
 	for i := range nodeCount {
 		seen[fmt.Sprintf("%v", vecs[i*d:(i+1)*d])] = struct{}{}

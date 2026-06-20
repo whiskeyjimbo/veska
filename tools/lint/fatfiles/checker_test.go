@@ -10,7 +10,7 @@ import (
 	"github.com/whiskeyjimbo/veska/tools/lint/fatfiles"
 )
 
-// TestCheck covers the three ratchet behaviours from the acceptance criteria.
+// TestCheck covers the three ratchet behaviors from the acceptance criteria.
 func TestCheck(t *testing.T) {
 	t.Parallel()
 

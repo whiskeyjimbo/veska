@@ -180,7 +180,7 @@ func listUsers(c *gin.Context) {}
 }
 
 // TestParseFile_ChiRouteTitleCaseVerb guards: chi spells the
-// verb title-case (Get); the route name still normalises to "GET /path"
+// verb title-case (Get); the route name still normalizes to "GET /path"
 // and the handler selector resolves through the package qualifier.
 func TestParseFile_ChiRouteTitleCaseVerb(t *testing.T) {
 	src := []byte(`package main
@@ -831,11 +831,11 @@ func (p *Promoter) Promote() {
 }
 
 // TestParseFile_AnonCallsInTopLevelVar covers (anonymous
-// functions in top-level var initialisers contribute CALLS edges)
+// functions in top-level var initializers contribute CALLS edges)
 // extended by (attribution is the SURROUNDING VAR, not the
 // package node, whenever the var has a resolvable name). Legacy
-// behaviour attributed both calls to the package node - that hid the
-// caller's identity for every cobra-app initialiser. New behaviour:
+// behavior attributed both calls to the package node - that hid the
+// caller's identity for every cobra-app initializer. New behavior:
 // `root = func{ serveRoot }` produces root → serveRoot, and
 // `chk = func{ validate }` produces chk → validate. The package
 // node is no longer the CALLS src for these.
@@ -897,8 +897,8 @@ var (
 
 // TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough guards
 // the negative case: a selector whose operand is NOT a tracked local
-// variable (e.g. a function parameter, a struct field, an unrecognised
-// expression) must keep the prior behaviour - treated as a package
+// variable (e.g. a function parameter, a struct field, an unrecognized
+// expression) must keep the prior behavior - treated as a package
 // qualifier with IsMethodCall=false. Otherwise we'd wrongly bind real
 // pkg.Foo calls to method-name lookups.
 func TestParseFile_ChainedSelector_UnknownOperandStillFallsThrough(t *testing.T) {
@@ -1294,7 +1294,7 @@ func DoIt(name string) {
 
 // TestParseFile_AnonFuncInVarInitAttributesToSurroundingVar pins
 // calls inside an anonymous function nested in a
-// top-level var initialiser (the dominant cobra-app shape:
+// top-level var initializer (the dominant cobra-app shape:
 // `var helloCmd = &cobra.Command{ RunE: func{ Foo } }`) must
 // attribute to the surrounding var node (helloCmd), not the package
 // node. Before the fix, cross-repo blast on Foo named "package cmd"
@@ -1627,7 +1627,7 @@ func TestRender() {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// The TestRender → Greeting.Render edge must materialise as a
+	// The TestRender → Greeting.Render edge must materialize as a
 	// resolved CALLS edge (both endpoints live in this file), not an
 	// UnresolvedCall - there's no cross-package indirection here.
 	var hasEdge bool
@@ -1701,11 +1701,11 @@ func TestRenderPtr() {
 
 // TestParseFile_PackageVarCompositeLiteralOrigin covers the cobra-shaped
 // pattern surfaced in the junior onboarding journey ( /
-// ): a package-level var initialised from a composite literal
+// ): a package-level var initialized from a composite literal
 // `&pkg.Type{.}` is the dominant cobra app shape, and subsequent
 // `rootCmd.AddCommand(.)` calls must emit method-call UnresolvedCalls
 // against the pkg's import path. Before this fix collectLocalVarOrigins
-// only walked function bodies and only recognised `v:= pkg.F(.)`, so
+// only walked function bodies and only recognized `v:= pkg.F(.)`, so
 // package-scoped vars holding a composite literal became
 // PkgQualifier="rootCmd" - an unresolvable bareword that never produced
 // a cross-repo stub.

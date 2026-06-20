@@ -53,7 +53,7 @@ func TestComputeRecall(t *testing.T) {
 
 // TestMeasureRecallAndLatency verifies the harness plumbing via a stub index.
 func TestMeasureRecallAndLatency(t *testing.T) {
-	// Perfect stub index: returns the actual brute-force neighbours.
+	// Perfect stub index: returns the actual brute-force neighbors.
 	corpus := gen.GenerateVectors(200, 42)
 	holdOut := gen.GenerateVectors(20, 999)
 

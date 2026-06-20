@@ -39,7 +39,7 @@ type RepoFreshness struct {
 	State       string `json:"state"`
 }
 
-// IndexFreshnessReport summarises whether each registered repo's promoted sha
+// IndexFreshnessReport summarizes whether each registered repo's promoted sha
 // matches its current git HEAD. It is INFORMATIONAL: a "behind" repo must NOT
 // promote the doctor rollup. Veska auto-reconciles via fsnotify and the startup
 // resync, so a just-committed-but-not-yet-reindexed mismatch is a normal,

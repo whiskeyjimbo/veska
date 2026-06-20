@@ -203,7 +203,7 @@ func ScanManifestDeps(ctx context.Context, src ports.VulnSource, repoID, branch,
 
 // mapSeverity translates an OSV severity label onto the domain Severity enum.
 // Unknown labels fall back to Medium so an advisory is never silently dropped
-// for want of a recognised label.
+// for want of a recognized label.
 func mapSeverity(label string) domain.Severity {
 	switch strings.ToUpper(strings.TrimSpace(label)) {
 	case "CRITICAL":

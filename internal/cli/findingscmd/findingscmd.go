@@ -61,7 +61,7 @@ type ListParams struct {
 
 // RunList implements `veska findings list`: it resolves scope, gathers the
 // findings (optionally fanning out across every registered repo), and renders
-// them. Behaviour mirrors the prior cmd/veska findingsListCmd RunE.
+// them. Behavior mirrors the prior cmd/veska findingsListCmd RunE.
 func RunList(ctx context.Context, p ListParams) error {
 	baseParams, fanout := p.listScope(ctx)
 	resp, err := p.gatherFindings(ctx, baseParams, fanout)

@@ -179,7 +179,7 @@ rule are documented in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
 - A visual dashboard. Visualization belongs in your editor.
 - A primary truth derived from LLMs. Call edges, blast radius, and
-  containment come from tree-sitter and the parser. LLMs summarise
+  containment come from tree-sitter and the parser. LLMs summarize
   and review; they don't replace the structural graph.
 - A distributed database. SQLite is one. Veska leans on it.
 - A multi-machine product. If you want to share intelligence

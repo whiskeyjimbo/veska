@@ -240,8 +240,8 @@ func defaultBackupDir() string {
 	return filepath.Join(home, ".veska", "backups", ".pre-migration")
 }
 
-// normaliseDSN delegates DSN construction to the compiled sql driver wrapper.
-func normaliseDSN(path string) string {
+// normalizeDSN delegates DSN construction to the compiled sql driver wrapper.
+func normalizeDSN(path string) string {
 	return sqldriver.BuildDSN(path, 5000)
 }
 
@@ -265,7 +265,7 @@ func applyPragmas(db *sql.DB) error {
 
 // openAndMigrate is the shared implementation for Open and OpenWithOptions.
 func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
-	db, err := sql.Open(sqldriver.Name, normaliseDSN(path))
+	db, err := sql.Open(sqldriver.Name, normalizeDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.Open %s: %w", path, err)
 	}
@@ -327,7 +327,7 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 	return db, nil
 }
 
-// Options controls optional behaviour for OpenWithOptions.
+// Options controls optional behavior for OpenWithOptions.
 type Options struct {
 	// BackupDir overrides the default auto-snapshot directory.
 	BackupDir string

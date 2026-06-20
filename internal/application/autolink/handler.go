@@ -42,7 +42,7 @@ type fileNodeLookup interface {
 }
 
 // nonSymbolKinds are container / sub-symbol node kinds for which a
-// nearest-neighbour "similar to" link is noise: package and chunk nodes embed
+// nearest-neighbor "similar to" link is noise: package and chunk nodes embed
 // near-identical boilerplate across files and flood the findings list
 // A blocklist (rather than a symbol allowlist) keeps unknown or
 // future symbol kinds eligible by default.
@@ -79,7 +79,7 @@ type Handler struct {
 	// clones) skip autolink entirely - a 75-file external clone like
 	// spf13/pflag otherwise yields ~100 low-severity findings on the
 	// junior's first 'findings list'. When the option
-	// is unset (older composition roots), behaviour is unchanged.
+	// is unset (older composition roots), behavior is unchanged.
 	repoKind func(ctx context.Context, repoID string) (string, error)
 }
 
@@ -136,7 +136,7 @@ func NewHandler(
 const Rule = "auto-link"
 
 // Handle processes a single ports.WorkRow of kind WorkKindAutoLink.
-// Behaviour:
+// Behavior:
 //
 //	Wrong kind returns an error (programmer or routing bug).
 //	Empty payload returns nil (nothing to do).
@@ -186,7 +186,7 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	}
 
 	// Supersede any prior open auto-link findings whose source node is in this
-	// file: re-promoting a file can yield a different set of nearest-neighbour
+	// file: re-promoting a file can yield a different set of nearest-neighbor
 	// targets (embeddings drift, vector backend tie-breaks reorder), so older
 	// (now-orphaned) auto-link findings would otherwise accumulate alongside
 	// the fresh ones and the "open findings" surface would balloon across

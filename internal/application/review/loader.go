@@ -45,7 +45,7 @@ func NewLoader() (*Loader, error) {
 	return &Loader{prompts: prompts}, nil
 }
 
-// LoadPrompt returns the versioned Prompt for kind. An unrecognised kind
+// LoadPrompt returns the versioned Prompt for kind. An unrecognized kind
 // returns ErrUnknownKind.
 func (l *Loader) LoadPrompt(kind ReviewKind) (Prompt, error) {
 	p, ok := l.prompts[kind]

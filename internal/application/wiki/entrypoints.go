@@ -122,14 +122,14 @@ type SelectOptions struct {
 
 // Select computes the entry_points report for (repoID, branch).
 // Real entry points have HIGH inbound fan-in: lots of call sites depend
-// on them. Exported (capitalised) names in non-test files are likelier
+// on them. Exported (capitalized) names in non-test files are likelier
 // entry points than internal helpers. The previous gate - "must have
 // an adjacent test, must have small blast radius" - selected leaves,
 // not entry points ('s close-reason flagged this). Adjacent
 // tests are now a tiebreaker bonus, not a hard requirement.
 // Ranking:
 //  1. inbound_count desc (the moat: real fan-in)
-//  2. exported desc (capitalised symbols rank above unexported)
+//  2. exported desc (capitalized symbols rank above unexported)
 //  3. has_adjacent_test desc (testedness as a tiebreaker)
 //  4. symbol_name asc (final determinism)
 //
@@ -272,7 +272,7 @@ func isGoInitFunc(n *domain.Node) bool {
 	return n.Name == "init" && n.Kind == domain.KindFunction && strings.HasSuffix(n.Path, ".go")
 }
 
-// isExported mirrors Go's capitalised-identifier convention but is
+// isExported mirrors Go's capitalized-identifier convention but is
 // applied uniformly across languages: a symbol whose first letter is
 // uppercase is the language-agnostic signal for "public API surface".
 // TS/JS classes (PascalCase) and exported Python functions follow the

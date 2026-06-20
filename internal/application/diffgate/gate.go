@@ -70,7 +70,7 @@ func derefAnchor(f *domain.Finding) string {
 }
 
 // Gate composes the verify and scope-containment sub-verdicts into one pass/fail
-// result. It adds no analysis logic of its own - all judgement lives in the
+// result. It adds no analysis logic of its own - all judgment lives in the
 // Verifier and Guard; the Gate only runs both and combines their outputs.
 type Gate struct {
 	verifier *Verifier

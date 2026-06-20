@@ -51,7 +51,7 @@ func NewArea() *Area {
 	}
 }
 
-// config accumulates the optional behaviour of a Stage call.
+// config accumulates the optional behavior of a Stage call.
 type config struct {
 	guard bool
 	gen   uint64

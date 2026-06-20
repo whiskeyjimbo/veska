@@ -18,7 +18,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/platform/health"
 )
 
-// BundleOptions controls the behaviour of CreateBundle.
+// BundleOptions controls the behavior of CreateBundle.
 type BundleOptions struct {
 	// VeskaHome is the veska data directory (e.g. ~/.veska).
 	VeskaHome string

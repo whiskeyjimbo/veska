@@ -120,7 +120,7 @@ func seedNodes(db *sql.DB, repoID, branch string, n int) error {
 }
 
 func main() {
-	// Use a file-based temp DB for realistic WAL behaviour.
+	// Use a file-based temp DB for realistic WAL behavior.
 	dir, err := os.MkdirTemp("", "mcp-latency-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mktemp: %v\n", err)

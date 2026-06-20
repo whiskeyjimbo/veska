@@ -2,7 +2,7 @@
 
 Generated: 2026-05-14
 
-This file summarises the M1 benchmark results from `tools/loadtest/spikes/hnsw/`
+This file summarizes the M1 benchmark results from `tools/loadtest/spikes/hnsw/`
 and `tools/loadtest/spikes/hnsw/cmd/vector-bench/` that inform ADR-S0014
 (vec0-to-HNSW pivot and dual-backend strategy).
 
@@ -55,7 +55,7 @@ Corpus: 768-dim synthetic vectors seed=42. Hold-out: 100 queries seed=999.
 
 Tracked in `internal/infrastructure/vector/sqlitevec` constants:
 
-| Threshold | Value | veska doctor storage behaviour |
+| Threshold | Value | veska doctor storage behavior |
 |-----------|-------|-------------------------------|
 | Yellow    | 75k   | Warning: approaching sqlite-vec ceiling |
 | Red       | 90k   | Error: switch to usearch backend         |

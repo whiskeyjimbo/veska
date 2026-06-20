@@ -43,7 +43,7 @@ func TestNewTracerProvider_ValidEndpointReturnsProvider(t *testing.T) {
 func TestNewTracerProvider_RatioThreadedIntoSampler(t *testing.T) {
 	// TraceIDRatioBased is deterministic at the extremes: 0.0 always drops a
 	// root span, 1.0 always samples it. The SDK exposes no sampler accessor,
-	// so assert the threaded ratio through observable sampling behaviour. A
+	// so assert the threaded ratio through observable sampling behavior. A
 	// hardcoded 1.0 implementation fails the 0.0 case.
 	cases := []struct {
 		ratio      float64

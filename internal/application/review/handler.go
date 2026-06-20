@@ -70,7 +70,7 @@ type Handler struct {
 type HandlerOption func(*Handler)
 
 // WithQuota wires in the review token Quota. Without it the handler runs every
-// job unconditionally (the pre-nz2.5 behaviour).
+// job unconditionally (the pre-nz2.5 behavior).
 func WithQuota(q *Quota) HandlerOption {
 	return func(h *Handler) {
 		if q != nil {
@@ -126,7 +126,7 @@ func NewHandler(gen ports.LLMGenerator, loader *Loader, repoRoot RepoRootFunc, f
 }
 
 // Handle processes one ports.WorkRow of kind WorkKindReview.
-// Behaviour:
+// Behavior:
 //
 //	Wrong kind: wrapped error (routing bug).
 //	Empty payload: nil (no file => nothing to review).

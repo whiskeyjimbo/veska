@@ -236,7 +236,7 @@ func TestPoller_RetryAndFail(t *testing.T) {
 	t.Errorf("expected state=failed with attempts>=3, got state=%q attempts=%d", state, attempts)
 }
 
-// TestPoller_ContextCancelStopsGoroutines verifies that cancelling the context
+// TestPoller_ContextCancelStopsGoroutines verifies that canceling the context
 // causes Start to stop cleanly without goroutine leaks.
 func TestPoller_ContextCancelStopsGoroutines(t *testing.T) {
 	t.Parallel()

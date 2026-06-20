@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Jeff Rose
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Package layercheck implements an import-graph layer analyser that enforces
+// Package layercheck implements an import-graph layer analyzer that enforces
 // architectural boundaries between core, application, and infrastructure layers.
 // Forbidden import directions:
 //
@@ -65,7 +65,7 @@ func checkViolation(importer, imported string) (rule string, violated bool) {
 // segment as a complete sub-path (not just a substring).
 // It matches both "…/segment/…" and "…/segment" (at the end).
 func containsSegment(path, segment string) bool {
-	// Normalise to forward slashes (handles Windows if ever needed).
+	// Normalize to forward slashes (handles Windows if ever needed).
 	path = filepath.ToSlash(path)
 	return strings.Contains(path, "/"+segment+"/") ||
 		strings.HasSuffix(path, "/"+segment)

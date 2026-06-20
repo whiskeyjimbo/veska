@@ -703,7 +703,7 @@ func TestHandler_Integration_PersistsAndIsIdempotent(t *testing.T) {
 }
 
 // regression: re-promoting a file whose source nodes now match a
-// DIFFERENT set of nearest-neighbour targets must NOT leave the prior
+// DIFFERENT set of nearest-neighbor targets must NOT leave the prior
 // auto-link findings open. Without the supersession step the open
 // "auto-link" surface balloons across reindexes; with it, only the
 // fresh candidates remain open and the obsolete ones flip to

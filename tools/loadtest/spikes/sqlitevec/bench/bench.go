@@ -122,7 +122,7 @@ func QueryVec0(db *sql.DB, queryVec []float32, k int) ([]int64, error) {
 // using a random 768-dim query vector each time.
 // Returns LatencyStats for the warm pass.
 // For cold benchmarking: the caller should close the DB, issue `PRAGMA cache_size=0`
-// on reopen, then call RunQueryBench again. This approximates cold-cache behaviour;
+// on reopen, then call RunQueryBench again. This approximates cold-cache behavior;
 // true post-restart cold is not achievable without a process restart.
 func RunQueryBench(db *sql.DB, k, nQueries int, rng *rand.Rand) (LatencyStats, error) {
 	// Pre-generate query vectors to avoid generation overhead in the timing loop.

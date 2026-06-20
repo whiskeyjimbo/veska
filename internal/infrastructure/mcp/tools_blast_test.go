@@ -111,7 +111,7 @@ func TestBlastRadius_DefaultsToCallers(t *testing.T) {
 	}
 }
 
-func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
+func TestBlastRadius_HonorsCalleesDirection(t *testing.T) {
 	edges := &blastFakeEdges{outbound: map[string][]string{
 		"seed": {"callee"},
 	}}
@@ -136,7 +136,7 @@ func TestBlastRadius_HonoursCalleesDirection(t *testing.T) {
 		t.Fatalf("err: %+v", rpcErr)
 	}
 	if len(resp.Entries) != 2 || resp.Entries[1].NodeID != "callee" {
-		t.Errorf("expected callee neighbour, got %+v", resp.Entries)
+		t.Errorf("expected callee neighbor, got %+v", resp.Entries)
 	}
 }
 

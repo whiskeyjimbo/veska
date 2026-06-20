@@ -486,7 +486,7 @@ func TestRepoRegistrar_AddRepo_ReparserErrorIsNonFatal(t *testing.T) {
 	}
 }
 
-// TestRepoRegistrar_AddRepo_ContextCanceled asserts that a daemonCtx cancelled
+// TestRepoRegistrar_AddRepo_ContextCanceled asserts that a daemonCtx canceled
 // before dispatch yields a clean exit (no panic, no error from AddRepo). The
 // reparser observes ctx.Err and returns context.Canceled, which the registrar
 // swallows.
@@ -494,7 +494,7 @@ func TestRepoRegistrar_AddRepo_ContextCanceled(t *testing.T) {
 	db, root := newAddRepoTestEnv(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // pre-cancelled
+	cancel() // pre-canceled
 
 	var wg sync.WaitGroup
 	rr := &repoRegistrar{
@@ -516,7 +516,7 @@ func TestRepoRegistrar_AddRepo_ContextCanceled(t *testing.T) {
 	}
 
 	if _, _, err := rr.AddRepo(context.Background(), root); err != nil {
-		t.Fatalf("AddRepo returned err under cancelled daemonCtx: %v", err)
+		t.Fatalf("AddRepo returned err under canceled daemonCtx: %v", err)
 	}
 
 	done := make(chan struct{})

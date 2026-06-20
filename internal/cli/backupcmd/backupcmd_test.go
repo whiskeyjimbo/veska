@@ -54,7 +54,7 @@ func TestRunListFiltersAndTagsKinds(t *testing.T) {
 	writeFile(t, dir, "veska-backup-2026.tar.gz")
 	writeFile(t, dir, "auto-pre-migration-2026.tar.gz")
 	writeFile(t, dir, "unrelated.txt")
-	writeFile(t, dir, "stray.tar.gz") // tar.gz but no recognised prefix
+	writeFile(t, dir, "stray.tar.gz") // tar.gz but no recognized prefix
 
 	var out bytes.Buffer
 	if err := RunList(params(&out, dir, false)); err != nil {
@@ -65,7 +65,7 @@ func TestRunListFiltersAndTagsKinds(t *testing.T) {
 		t.Errorf("want both kinds tagged, got:\n%s", s)
 	}
 	if strings.Contains(s, "unrelated.txt") || strings.Contains(s, "stray.tar.gz") {
-		t.Errorf("unrecognised files should be skipped, got:\n%s", s)
+		t.Errorf("unrecognized files should be skipped, got:\n%s", s)
 	}
 }
 

@@ -126,7 +126,7 @@ func TestSelect_RanksByInboundCountFirst(t *testing.T) {
 }
 
 // TestSelect_ExportedBeatsUnexportedOnTie pins tiebreaker #2: when
-// inbound counts match, the exported (capitalised) symbol wins.
+// inbound counts match, the exported (capitalized) symbol wins.
 func TestSelect_ExportedBeatsUnexportedOnTie(t *testing.T) {
 	svc := epFixtureService(t)
 	rep, err := svc.Select(context.Background(), "r1", "main")

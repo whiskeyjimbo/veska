@@ -79,6 +79,6 @@ will replace these once the larger fixtures are seeded (mirroring the
 recall harness's milestone-close path).
 
 The harness is most useful as a regression detector: a sudden jump in
-quick-mode FP rate on a fixed corpus indicates a behavioural change in
+quick-mode FP rate on a fixed corpus indicates a behavioral change in
 `autolink.Linker` (e.g. threshold tuning, top-k changes, score
 direction flip) rather than an embedder change.

@@ -57,7 +57,7 @@ type RunOpts struct {
 }
 
 // Run is the search command entry point. See cmd/veska/search.go for the
-// flag/positional contract; this preserves the original runSearch behaviour
+// flag/positional contract; this preserves the original runSearch behavior
 // byte-for-byte.
 func Run(ctx context.Context, w, stderr io.Writer, opts RunOpts) error {
 	// Daemon-first: when a daemon is up and already tracks the target repo,

@@ -103,7 +103,7 @@ func NewHandler(hotZone *HotZoneService, entry *EntryPointsService, store Render
 // Handle processes one ports.WorkRow of kind WorkKindWiki: it regenerates
 // both wiki pages under and, on full success, stamps the
 // last-render time.
-// Behaviour:
+// Behavior:
 //
 //	Wrong kind: wrapped error (routing bug).
 //	Repo-root resolution / ranking / rendering / write error: wrapped

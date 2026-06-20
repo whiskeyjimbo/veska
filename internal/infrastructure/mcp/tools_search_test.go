@@ -241,8 +241,8 @@ func TestSearchSemantic_SingleRepoOmitsRepoIDOnHits(t *testing.T) {
 	}
 }
 
-// TestSearchSemantic_LimitAliasHonoured ensures that the limit parameter is respected as an alias for k.
-func TestSearchSemantic_LimitAliasHonoured(t *testing.T) {
+// TestSearchSemantic_LimitAliasHonored ensures that the limit parameter is respected as an alias for k.
+func TestSearchSemantic_LimitAliasHonored(t *testing.T) {
 	emb := &stubEmbedder{vec: []float32{0.1, 0.2}}
 	hits := []domain.SearchHit{
 		{NodeID: "n1", Score: 0.9},
@@ -399,7 +399,7 @@ func (s *stubLex) Search(_ context.Context, _, _, _ string, _ int) ([]ports.Lexi
 	return s.hits, nil
 }
 
-func TestSearchSimilar_ReturnsNeighboursExcludingSeed(t *testing.T) {
+func TestSearchSimilar_ReturnsNeighborsExcludingSeed(t *testing.T) {
 	seedVec := []float32{0.5, 0.5, 0.5}
 	emb := &stubEmbedder{}
 	vecs := &stubVectors{
@@ -610,8 +610,8 @@ func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
 		},
 	}
 	emb := &stubEmbedder{}
-	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "tight"}, {NodeID: "neighbour"}}}
-	nodes.metas = append(nodes.metas, ports.NodeMeta{NodeID: "neighbour", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"})
+	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "tight"}, {NodeID: "neighbor"}}}
+	nodes.metas = append(nodes.metas, ports.NodeMeta{NodeID: "neighbor", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"})
 	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec([]float32{0.1, 0.2}), dim: 2, found: true}
 	svc, err := search.NewService(emb, vecs, nodes)
 	if err != nil {
@@ -631,8 +631,8 @@ func TestFindRelated_ResolvesSmallestEnclosingNode(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("dispatch: %+v", rpcErr)
 	}
-	if len(resp.Results) != 1 || resp.Results[0].NodeID != "neighbour" {
-		t.Errorf("want [neighbour] as the single returned hit, got %+v", resp.Results)
+	if len(resp.Results) != 1 || resp.Results[0].NodeID != "neighbor" {
+		t.Errorf("want [neighbor] as the single returned hit, got %+v", resp.Results)
 	}
 }
 
@@ -643,10 +643,10 @@ func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 		byFile: map[string][]string{"foo.go": {"seed"}},
 		metas: []ports.NodeMeta{
 			{NodeID: "seed", FilePath: "foo.go", LineStart: 5, LineEnd: 30, Kind: "function"},
-			{NodeID: "neighbour", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"},
+			{NodeID: "neighbor", FilePath: "other.go", LineStart: 1, LineEnd: 3, SymbolPath: "Other"},
 		},
 	}
-	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "seed"}, {NodeID: "neighbour"}}}
+	vecs := &stubVectors{hits: []domain.SearchHit{{NodeID: "seed"}, {NodeID: "neighbor"}}}
 	lookup := &stubSimilarLookup{hash: "h", ready: true, blob: encodeVec([]float32{0.1, 0.2}), dim: 2, found: true}
 	svc, err := search.NewService(&stubEmbedder{}, vecs, nodes)
 	if err != nil {
@@ -668,8 +668,8 @@ func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("relative path should resolve, got %+v", rpcErr)
 	}
-	if len(resp.Results) != 1 || resp.Results[0].NodeID != "neighbour" {
-		t.Errorf("want [neighbour] from resolved relative path, got %+v", resp.Results)
+	if len(resp.Results) != 1 || resp.Results[0].NodeID != "neighbor" {
+		t.Errorf("want [neighbor] from resolved relative path, got %+v", resp.Results)
 	}
 
 	respAbs, rpcErr := dispatchSearch(t, r, "eng_find_related", map[string]any{
@@ -682,8 +682,8 @@ func TestFindRelated_ResolvesRelativePath(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("absolute path should still work, got %+v", rpcErr)
 	}
-	if len(respAbs.Results) != 1 || respAbs.Results[0].NodeID != "neighbour" {
-		t.Errorf("want [neighbour] from absolute path, got %+v", respAbs.Results)
+	if len(respAbs.Results) != 1 || respAbs.Results[0].NodeID != "neighbor" {
+		t.Errorf("want [neighbor] from absolute path, got %+v", respAbs.Results)
 	}
 }
 

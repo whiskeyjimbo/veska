@@ -106,7 +106,7 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 // callers|callees|both, plus empty for the callers default) and returns the
 // blast-layer Direction. It widens the accepted input set without changing the
 // existing default (empty -> DirCallers via ParseDirection). Unknown values
-// return CodeInvalidParams, matching the prior behaviour.
+// return CodeInvalidParams, matching the prior behavior.
 func parseBlastDirection(s string) (blastradius.Direction, *RPCError) {
 	canonical, ok := normalizeDirection(s)
 	if !ok {

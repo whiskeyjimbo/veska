@@ -79,7 +79,7 @@ func ComputeRecall(provider Embedder, pairs []Pair, docs []doc) RecallScores {
 			s.Miss++
 			continue
 		}
-		// Brute-force top-probe by dot product (vectors are L2-normalised).
+		// Brute-force top-probe by dot product (vectors are L2-normalized).
 		bestRank := topKByDot(qvec, docs, probe, p.Expected)
 		if bestRank < 0 {
 			s.Miss++
@@ -98,7 +98,7 @@ func ComputeRecall(provider Embedder, pairs []Pair, docs []doc) RecallScores {
 	}
 	// Raw series: denominator = N (includes not-in-corpus).
 	denom := float64(s.N)
-	// Stash counts of in-top-K hits before normalising so we can also
+	// Stash counts of in-top-K hits before normalizing so we can also
 	// compute the fair series with a different denominator.
 	hits1, hits5, hits10, sumRR := s.At1, s.At5, s.At10, s.MRR
 	s.At1 = hits1 / denom

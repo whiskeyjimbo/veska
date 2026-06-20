@@ -42,7 +42,7 @@ func CanonicalURL(raw string) (string, error) {
 		if host == "" {
 			return "", ErrInvalidURL
 		}
-		return normaliseURL("https", host, "/"+path), nil
+		return normalizeURL("https", host, "/"+path), nil
 	}
 
 	switch scheme {
@@ -58,7 +58,7 @@ func CanonicalURL(raw string) (string, error) {
 		if path != "" {
 			path = "/" + path
 		}
-		return normaliseURL("https", authority, path), nil
+		return normalizeURL("https", authority, path), nil
 	case "file":
 		// File URLs remain prefixed with file://, stripping the authority segment for canonicality.
 		_, path, _ := strings.Cut(rest, "/")
@@ -87,8 +87,8 @@ func splitScheme(raw string) (scheme, rest string, ok bool) {
 	return scheme, raw[idx+3:], true
 }
 
-// normaliseURL standardizes URL components by lowercasing the host and stripping trailing slashes or ".git" suffixes.
-func normaliseURL(scheme, authority, path string) string {
+// normalizeURL standardizes URL components by lowercasing the host and stripping trailing slashes or ".git" suffixes.
+func normalizeURL(scheme, authority, path string) string {
 	host, port, hasPort := strings.Cut(authority, ":")
 	host = strings.ToLower(host)
 	if hasPort {

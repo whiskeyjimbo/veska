@@ -16,7 +16,7 @@ type ReviewKind string
 const (
 	// KindSecurity reviews the code-under-review for security defects.
 	KindSecurity ReviewKind = "security"
-	// KindContractDrift reviews the code-under-review for behavioural or
+	// KindContractDrift reviews the code-under-review for behavioral or
 	// API-contract drift relative to its prior signature.
 	KindContractDrift ReviewKind = "contract_drift"
 )

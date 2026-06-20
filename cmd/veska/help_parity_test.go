@@ -28,7 +28,7 @@ func TestCLILongMatchesMCPDescription_Calls(t *testing.T) {
 // TestCLILongMatchesMCPDescription_Blast pins: the `veska
 // blast` Long help string must reuse the MCP eng_get_blast_radius
 // description verbatim and reference the diff/dirty variants and the
-// cross-repo fan-out behaviour.
+// cross-repo fan-out behavior.
 func TestCLILongMatchesMCPDescription_Blast(t *testing.T) {
 	cmd := blastCmd()
 	if cmd.Long != mcpinfra.DescBlastRadius {
@@ -90,7 +90,7 @@ func TestCLILongMatchesMCPDescription_Symbol(t *testing.T) {
 
 // TestCLILongMatchesMCPDescription_Context pins: the `veska
 // context` Long help must equal the MCP DescContextPack fragment. Only the
-// shared purpose + cross-repo behaviour is pinned; the MCP-only anchor prose
+// shared purpose + cross-repo behavior is pinned; the MCP-only anchor prose
 // (node_id/task_id) is deliberately absent because the CLI takes only a
 // symbol, so the help must not advertise inputs the command rejects.
 func TestCLILongMatchesMCPDescription_Context(t *testing.T) {

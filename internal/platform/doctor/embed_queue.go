@@ -18,7 +18,7 @@ const (
 	embedQueueDegradedPending = 1000
 )
 
-// EmbedQueueReport summarises the state of node_embedding_refs for the
+// EmbedQueueReport summarizes the state of node_embedding_refs for the
 // doctor subcommand.
 //
 //	Status "healthy" - no failed rows, pending < degraded threshold.

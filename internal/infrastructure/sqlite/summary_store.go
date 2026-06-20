@@ -12,7 +12,7 @@ import (
 )
 
 // SummaryStore is the SQLite adapter for summary.Store. Reads run on the read
-// pool; the single short_summary UPDATE runs on the serialised write pool.
+// pool; the single short_summary UPDATE runs on the serialized write pool.
 type SummaryStore struct {
 	readDB  *sql.DB
 	writeDB *sql.DB

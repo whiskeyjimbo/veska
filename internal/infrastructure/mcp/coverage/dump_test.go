@@ -5,7 +5,7 @@ package coverage
 
 // This is the THROWAWAY exploratory dump used to AUTHOR the frozen manifest
 // It is NOT a coverage harness and asserts nothing about tool
-// behaviour. It indexes the two fixture modules through the real cold-scan
+// behavior. It indexes the two fixture modules through the real cold-scan
 // pipeline (no Ollama) and logs every (path,kind,name) node, every edge
 // resolved back to its endpoint keys, every cross-repo stub, and every TODO.
 // Run it with:

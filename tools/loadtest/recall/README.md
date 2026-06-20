@@ -35,7 +35,7 @@ Larger populations require a cached embedding fixture at
 `RECALL_GENERATE=1` is not set, the test **skips** (not fails). With
 `RECALL_GENERATE=1` and a reachable Ollama, the harness seeds the
 fixture from real Ollama (one POST /api/embeddings per node) before
-running the recall queries. The Ollama URL/model honour the same env
+running the recall queries. The Ollama URL/model honor the same env
 vars as the embedder bench: `VESKA_OLLAMA_URL` (default
 `http://localhost:11434`) and `VESKA_EMBED_MODEL` (default
 `nomic-embed-text`). If Ollama is not reachable the test skips with a
@@ -90,7 +90,7 @@ directory:
 
 ## Quick mode semantics
 
-The fake embedder projects each text to an L2-normalised 64-dim vector
+The fake embedder projects each text to an L2-normalized 64-dim vector
 with a strong positive spike on `cluster_id mod 64`. Cluster-center
 queries share the spike direction with their members, so a healthy
 plumbing path yields mean_recall > 0 (typical: 0.6–0.7 at pop=1000

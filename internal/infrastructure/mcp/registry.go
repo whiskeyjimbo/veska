@@ -345,7 +345,7 @@ type CallToolResult struct {
 }
 
 // ToolContent is one MCP content block. Only text blocks are emitted; the text
-// is the JSON-serialised handler payload.
+// is the JSON-serialized handler payload.
 type ToolContent struct {
 	Type string `json:"type"`
 	Text string `json:"text"`

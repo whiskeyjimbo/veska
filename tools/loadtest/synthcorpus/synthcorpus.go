@@ -9,7 +9,7 @@
 // the same cluster. The cluster id is encoded both in the node's
 // metadata (Cluster int) and in its synthetic Text so the FakeEmbedder
 // can produce a vector with a strong spike on the cluster axis without
-// needing access to the labelled metadata.
+// needing access to the labeled metadata.
 // Both harnesses depend on this package; the recall harness layers a
 // "center query" per cluster on top, while the autolink harness uses
 // existing node embeddings as the query.
@@ -130,7 +130,7 @@ func (FakeEmbedder) ModelID() string { return "fake-hash-v1" }
 //     small-magnitude noise across all axes so different members of
 //     the same cluster aren't literal duplicates.
 //
-// The whole vector is L2-normalised so cosine and L2-squared scoring
+// The whole vector is L2-normalized so cosine and L2-squared scoring
 // behave consistently.
 func FakeEmbed(text string) []float32 {
 	vec := make([]float32, FakeEmbeddingDim)
@@ -149,7 +149,7 @@ func FakeEmbed(text string) []float32 {
 		// 0.05-scale jitter, this dominates ranking).
 		vec[axis] += 1.0
 	}
-	normalise(vec)
+	normalize(vec)
 	return vec
 }
 
@@ -176,7 +176,7 @@ func ParseClusterID(text string) (int, bool) {
 	return k, true
 }
 
-func normalise(v []float32) {
+func normalize(v []float32) {
 	var sq float64
 	for _, x := range v {
 		sq += float64(x) * float64(x)

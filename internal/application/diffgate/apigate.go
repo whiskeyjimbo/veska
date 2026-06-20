@@ -44,7 +44,7 @@ type APIRemoval struct {
 // APIVerdict is the breaking-public-API gate's pass/fail result, covering two
 // detectors: signature-shape drift of an exported symbol (BreakingChanges) and
 // removal/rename of an exported symbol (RemovedSymbols). There is no degraded
-// "unchecked" mode: both states are materialisable from the (cloned,
+// "unchecked" mode: both states are materializable from the (cloned,
 // re-promoted) base graph, so Pass == (no breaking changes AND no removals).
 type APIVerdict struct {
 	Pass            bool         `json:"pass"`

@@ -19,7 +19,7 @@ import (
 
 // CycleParams are the dependency-cycle diff-gate inputs. Like clones/untested it
 // is a blanket gate (no target finding) and DOES need the indexed base graph:
-// the re-promote clones it, and the net-new judgement compares the candidate's
+// the re-promote clones it, and the net-new judgment compares the candidate's
 // dependency graph against the base's.
 type CycleParams struct {
 	RepoID       string
@@ -39,7 +39,7 @@ type cycleGateReport struct {
 // RunCycles gates the candidate on a net-new dependency cycle. It re-promotes the
 // candidate's changed files into a throwaway clone of the base graph (so
 // cross-file CALLS RESOLVE - the ephemeral overlay carries only intra-file
-// edges), materialises the after- and base-state directed dependency graphs,
+// edges), materializes the after- and base-state directed dependency graphs,
 // runs the cycle gate, and FAILs when a strongly-connected
 // component of >=2 symbols absent at base appears in the change set.
 // Index-ahead safety: both the base-state edge set AND the
@@ -119,7 +119,7 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 	return nil
 }
 
-// cycleEdgeGraphs materialises the after- and base-state dependency graphs for
+// cycleEdgeGraphs materializes the after- and base-state dependency graphs for
 // the cycle gate, plus a node_id->member naming map for the verdict.
 // Both graphs are built from a clone the changed files are re-promoted into (so
 // cross-file CALLS resolve - the ephemeral overlay only carries intra-file

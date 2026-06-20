@@ -242,9 +242,9 @@ func (s *Service) Semantic(ctx context.Context, repoID, branch, query string, k 
 	// and fuse with Reciprocal Rank Fusion. Vector cosine
 	// alone is too thin on small corpora - Sam's notes-API session
 	// returned scores in a ~0.00004 range across the top-10 - so the
-	// "right" answer routinely lost to neighbours by a rounding error.
+	// "right" answer routinely lost to neighbors by a rounding error.
 	// RRF is rank-only so the two retrievers' incompatible score
-	// distributions don't need normalising.
+	// distributions don't need normalizing.
 	// When lexical is absent (no FTS5 wired, or empty corpus on that
 	// side), the fusion path degrades to pure vector ordering.
 	var lexHits []ports.LexicalHit

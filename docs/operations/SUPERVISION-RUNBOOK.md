@@ -221,7 +221,7 @@ tail -100 ~/.veska/logs/daemon.log
 # 2. Address the cause (free disk, fix the usearch library / backend selection, etc.)
 
 # 3. Clear the breaker
-veska doctor reset-crash-loop   # clears the breaker marker after summarising the cause
+veska doctor reset-crash-loop   # clears the breaker marker after summarizing the cause
 
 # 4. Ask the supervisor to start
 veska service restart

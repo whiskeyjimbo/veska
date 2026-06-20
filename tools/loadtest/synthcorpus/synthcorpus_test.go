@@ -82,7 +82,7 @@ func TestParseClusterID(t *testing.T) {
 	}
 }
 
-func TestFakeEmbed_Deterministic_AndNormalised(t *testing.T) {
+func TestFakeEmbed_Deterministic_AndNormalized(t *testing.T) {
 	t.Parallel()
 	v1 := FakeEmbed("cluster_3_member_7")
 	v2 := FakeEmbed("cluster_3_member_7")
@@ -99,7 +99,7 @@ func TestFakeEmbed_Deterministic_AndNormalised(t *testing.T) {
 		sq += float64(x) * float64(x)
 	}
 	if math.Abs(sq-1.0) > 1e-5 {
-		t.Fatalf("not normalised: |v|^2 = %v", sq)
+		t.Fatalf("not normalized: |v|^2 = %v", sq)
 	}
 }
 

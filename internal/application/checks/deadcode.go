@@ -19,7 +19,7 @@ import (
 // on the promotion branch. "No inbound edges" is a necessary-but-not-sufficient
 // signal of deadness - the symbol could still be called by an external caller
 // the graph cannot see (entry points, exported APIs, framework callbacks, test
-// helpers). To minimise false positives the check skips a small allowlist of
+// helpers). To minimize false positives the check skips a small allowlist of
 // well-known external-entry shapes:
 //
 //	Functions/methods named main or init.
@@ -36,7 +36,7 @@ type DeadCodeCheck struct {
 	// user is exploring an external codebase, not curating its findings,
 	// and a 75-file pflag clone otherwise emits ~220 low-severity
 	// dead-code findings on the upstream public API.
-	// When unset, behaviour is unchanged.
+	// When unset, behavior is unchanged.
 	repoKind func(ctx context.Context, repoID string) (string, error)
 }
 

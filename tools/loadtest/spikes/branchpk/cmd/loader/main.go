@@ -75,7 +75,7 @@ func runLoad(dbPrefix string, overlapPct, nSymbols, nBranches int) (pkloader.Loa
 	}
 	defer db.Close()
 
-	// Single writer: serialise all work through one connection.
+	// Single writer: serialize all work through one connection.
 	db.SetMaxOpenConns(1)
 
 	if err := pkloader.CreateSchema(db); err != nil {

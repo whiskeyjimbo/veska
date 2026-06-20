@@ -292,7 +292,7 @@ func TestDaemon_VectorStoreRehydratesOnSecondStart(t *testing.T) {
 
 	// Seed a single known embedding directly into the durable tables - the
 	// real embedder requires Ollama which we don't have in unit tests.
-	// The vec is L2-normalised (magnitude 1) so any score comparison
+	// The vec is L2-normalized (magnitude 1) so any score comparison
 	// downstream behaves as the production code expects.
 	vec := []float32{1, 0, 0}
 	blob := veccodec.EncodeFloat32LE(vec)

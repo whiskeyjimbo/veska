@@ -122,7 +122,7 @@ type SecurityGate struct {
 	vulnEnabled bool
 }
 
-// NewSecurityGate constructs a SecurityGate. readers maps each recognised
+// NewSecurityGate constructs a SecurityGate. readers maps each recognized
 // manifest path to its parser; vulnEnabled reflects whether an advisory source
 // is configured (when false, the vuln dimension is not-applicable).
 func NewSecurityGate(scanSecrets SecretsScanFn, scanDeps DepsScanFn, readers map[string]ManifestReaderFn, vulnEnabled bool) *SecurityGate {
@@ -144,7 +144,7 @@ func (g *SecurityGate) Evaluate(ctx context.Context, in SecurityInput) (Security
 		v.NewSecretLeaks = append(v.NewSecretLeaks, toSecurityFinding(f))
 	}
 
-	// vulnerable_dependency: scan each recognised manifest at base and
+	// vulnerable_dependency: scan each recognized manifest at base and
 	// candidate refs; net-new = candidate findings whose finding_id is absent
 	// at base. finding_id excludes the line number, so a dep that merely shifts
 	// line is correctly not net-new.

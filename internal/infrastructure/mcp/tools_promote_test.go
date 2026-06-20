@@ -254,8 +254,8 @@ func TestPromoteRepoSchema_RejectsUnknownKeyAtDispatch(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_HonoursActorOverride ensures that custom actor attribution parameters from the schema are respected during promotion.
-func TestPromoteHandler_HonoursActorOverride(t *testing.T) {
+// TestPromoteHandler_HonorsActorOverride ensures that custom actor attribution parameters from the schema are respected during promotion.
+func TestPromoteHandler_HonorsActorOverride(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\n")
 	prom := &fakeProm{}
@@ -280,9 +280,9 @@ func TestPromoteHandler_HonoursActorOverride(t *testing.T) {
 	}
 }
 
-// TestPromoteHandler_HonoursBranchAndSHAOverride verifies that branch and git_sha overrides
+// TestPromoteHandler_HonorsBranchAndSHAOverride verifies that branch and git_sha overrides
 // skip the default git.HEAD lookup path.
-func TestPromoteHandler_HonoursBranchAndSHAOverride(t *testing.T) {
+func TestPromoteHandler_HonorsBranchAndSHAOverride(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, root, "a.go", "package a\n")
 	prom := &fakeProm{}

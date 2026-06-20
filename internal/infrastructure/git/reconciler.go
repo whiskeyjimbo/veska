@@ -41,7 +41,7 @@ func (e MtimeEntry) changedFrom(prev MtimeEntry) bool {
 type SweepStartHook func(ctx context.Context, repoID, dir string)
 
 // PostSweepHook is invoked once at the end of a wake sweep after all parallel walks have completed.
-// It is skipped if the sweep is cancelled before completion.
+// It is skipped if the sweep is canceled before completion.
 type PostSweepHook func(ctx context.Context)
 
 // ReconcileHandler is called with the repository identifier and absolute path of each modified file.
@@ -237,7 +237,7 @@ func (r *WakeReconciler) wallTick() time.Time {
 	return r.nowFn().Round(0)
 }
 
-// Start begins the background tick loop, executing until the context is cancelled.
+// Start begins the background tick loop, executing until the context is canceled.
 // It compares wall-clock timestamps rather than monotonic clocks because monotonic
 // clocks do not advance during system suspend.
 func (r *WakeReconciler) Start(ctx context.Context) {

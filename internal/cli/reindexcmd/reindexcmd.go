@@ -60,7 +60,7 @@ func Run(ctx context.Context, p Params) error {
 	w := p.Out
 
 	// when the daemon is up, route through eng_reindex_repo. The
-	// previous behaviour (refuse with a stop-the-daemon hint)
+	// previous behavior (refuse with a stop-the-daemon hint)
 	// disconnected the editor's MCP session and was a junior-hostile regression
 	// from add-time scans (which already run inside the daemon).
 	if p.DaemonRunning() {

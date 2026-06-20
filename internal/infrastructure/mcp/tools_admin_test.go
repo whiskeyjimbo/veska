@@ -189,7 +189,7 @@ func TestAdminTools_ListRepos(t *testing.T) {
 			t.Fatalf("marshal RepoView: %v", err)
 		}
 		if !strings.Contains(string(b), `"aliases":[]`) {
-			t.Errorf("repo %q must serialise aliases as []; got %s", v.RepoID, b)
+			t.Errorf("repo %q must serialize aliases as []; got %s", v.RepoID, b)
 		}
 	}
 }

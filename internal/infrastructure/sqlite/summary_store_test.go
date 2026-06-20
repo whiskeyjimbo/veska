@@ -23,7 +23,7 @@ func TestSummaryStore_RoundTrip(t *testing.T) {
 		t.Fatalf("insert repo: %v", err)
 	}
 
-	// Two nodes in the same file: a function (summarisable) and a package
+	// Two nodes in the same file: a function (summarizable) and a package
 	// (container) — the store returns both; kind filtering is the lane's job.
 	_, err := db.Exec(`INSERT INTO nodes (
 		node_id, branch, repo_id, language, kind, symbol_path, file_path,

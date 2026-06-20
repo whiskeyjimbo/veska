@@ -82,7 +82,7 @@ func (f *fakeNodes) LookupNodes(_ context.Context, _, _ string, ids []string) ([
 }
 
 // NodesInFile is required by ports.NodeLookup. The search service does not
-// call it, so the fake's behaviour here is irrelevant to the tests; we keep
+// call it, so the fake's behavior here is irrelevant to the tests; we keep
 // it returning nil to satisfy the interface.
 func (f *fakeNodes) NodesInFile(_ context.Context, _, _, _ string) ([]string, error) {
 	return nil, nil
@@ -197,7 +197,7 @@ func TestSemanticCandidates_TagsRanksAndUnionsRetrievers(t *testing.T) {
 		{NodeID: "vonly"}, // rank 2 in vector
 	}}
 	lex := &fakeLexical{hits: []ports.LexicalHit{
-		{NodeID: "vlex"},  // rank 1 in lex
+		{NodeID: "vlex"},    // rank 1 in lex
 		{NodeID: "lexonly"}, // rank 2 in lex
 	}}
 	nodes := &fakeNodes{rows: []ports.NodeMeta{

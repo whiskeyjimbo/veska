@@ -30,7 +30,7 @@ type nodeHasher interface {
 // Removed nodes are not returned (a deleted file stages an empty overlay entry,
 // so it contributes no candidate node); scope-containment is about nodes the
 // change touched, which for a deletion is captured by the file's surviving
-// neighbours, not the vanished node.
+// neighbors, not the vanished node.
 func (e *Ephemeral) ChangedNodeIDs(ctx context.Context) []string {
 	hasher, hasHasher := e.Base.(nodeHasher)
 	seen := make(map[string]struct{})

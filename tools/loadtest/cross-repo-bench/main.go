@@ -261,7 +261,7 @@ Runs: {{.NumRuns}}
 
 ## Thresholds
 
-| Colour | Threshold |
+| Color | Threshold |
 |--------|-----------|
 | GREEN  | p95 < 50ms |
 | YELLOW | 50ms ≤ p95 < 150ms |

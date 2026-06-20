@@ -35,7 +35,7 @@ type FindParams struct {
 
 // RunFind wraps eng_find_symbol: it issues the lookup, emits the cross-repo
 // "matches elsewhere" hint when a scoped probe comes back empty, and renders
-// the node list. Behaviour mirrors the prior cmd/veska symbolCmd RunE.
+// the node list. Behavior mirrors the prior cmd/veska symbolCmd RunE.
 func RunFind(ctx context.Context, p FindParams) error {
 	params := map[string]any{"symbol": p.Symbol}
 	if p.RepoID != "" {

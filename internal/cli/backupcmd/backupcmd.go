@@ -95,8 +95,8 @@ func RunList(p ListParams) error {
 	return tw.Flush()
 }
 
-// collectRows filters dir entries down to recognised backup tarballs, tagging
-// each with its kind. Unrecognised files and directories are skipped.
+// collectRows filters dir entries down to recognized backup tarballs, tagging
+// each with its kind. Unrecognized files and directories are skipped.
 func collectRows(dir string, entries []os.DirEntry) []row {
 	var rows []row
 	for _, e := range entries {

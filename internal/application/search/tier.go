@@ -36,7 +36,7 @@ func ScoreTier(s, top float32) string {
 // query that only landed in one retriever's list trips the warning.
 const WeakTopAbsolute float32 = 0.018
 
-// NormalizeScores returns the per-result min-max-normalised score
+// NormalizeScores returns the per-result min-max-normalized score
 // (0.1) for a results slice. When all scores are equal (or only one
 // result is present), each entry returns 1.0 so consumers don't have
 // to special-case the divide-by-zero. The function is pure - it

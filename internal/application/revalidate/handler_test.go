@@ -649,7 +649,7 @@ func TestHandler_EmptyStaleSkipsApply(t *testing.T) {
 }
 
 // TestHandler_MetricsOnlyBumpAfterApplyCommits ensures that if
-// ApplyDecisions fails (modelling a Commit failure inside the adapter),
+// ApplyDecisions fails (modeling a Commit failure inside the adapter),
 // neither the refreshed nor the closed counter advances. The retry path
 // re-derives decisions on the next Poller delivery.
 func TestHandler_MetricsOnlyBumpAfterApplyCommits(t *testing.T) {

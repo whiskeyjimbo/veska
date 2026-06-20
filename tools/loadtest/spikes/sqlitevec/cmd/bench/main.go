@@ -100,7 +100,7 @@ func main() {
 			}
 
 			// Cold pass: reopen with cache_size=0 to evict SQLite page cache.
-			// NOTE: this approximates cold-cache behaviour. True post-restart cold
+			// NOTE: this approximates cold-cache behavior. True post-restart cold
 			// requires a process restart to drop OS page cache (drop_caches). This
 			// is a known limitation - results reflect SQLite-cache-cold, not OS-cold.
 			coldDB, err := sql.Open("sqlite3", dbFile+"?_journal_mode=WAL&cache=shared")
