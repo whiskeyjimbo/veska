@@ -120,7 +120,7 @@ func (a *Adapter) Refresh(ctx context.Context) error {
 		return fmt.Errorf("osv refresh: open zip: %w", err)
 	}
 
-	if err := os.MkdirAll(a.cacheDir, 0o755); err != nil {
+	if err := os.MkdirAll(a.cacheDir, 0o700); err != nil {
 		return fmt.Errorf("osv refresh: create cache dir: %w", err)
 	}
 

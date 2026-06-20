@@ -175,8 +175,15 @@ func (b *daemonBuilder) validateConfig() error {
 	if b.cfg.MCPSockPath == "" {
 		return &ErrMissingDep{Name: "mcp_sock_path"}
 	}
-	if err := os.MkdirAll(filepath.Dir(b.cfg.SQLitePath), 0o755); err != nil {
+	// The daemon may start before `veska init` has run, so it is also a
+	// creator of VESKA_HOME. Keep it owner-only (0700): veska.db holds parsed
+	// private source and potential secrets. Chmod fixes pre-existing 0755 roots.
+	dataDir := filepath.Dir(b.cfg.SQLitePath)
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("daemon: mkdir sqlite dir: %w", err)
+	}
+	if err := os.Chmod(dataDir, 0o700); err != nil {
+		return fmt.Errorf("daemon: secure sqlite dir: %w", err)
 	}
 	return nil
 }

@@ -111,6 +111,37 @@ func TestInitCreatesLayout(t *testing.T) {
 	}
 }
 
+// TestInitSecuresHomePermissions pins the security guarantee: VESKA_HOME is
+// owner-only (0700) and the config is 0600, so other local users on a shared
+// host cannot read the parsed-source index or secrets. The home is pre-widened
+// to 0755 to prove the explicit Chmod downgrades an existing loose root (which
+// MkdirAll alone would not).
+func TestInitSecuresHomePermissions(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		t.Fatalf("pre-widen home: %v", err)
+	}
+	deps := Deps{VeskaHome: tmp, Probe: healthyProbe, GOOS: "linux"}
+
+	var buf bytes.Buffer
+	if err := Run(context.Background(), deps, Flags{Yes: true}, &buf); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	if info, err := os.Stat(tmp); err != nil {
+		t.Fatalf("stat home: %v", err)
+	} else if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Errorf("VESKA_HOME perm = %#o, want 0700", perm)
+	}
+
+	cfg := filepath.Join(tmp, "config.toml")
+	if info, err := os.Stat(cfg); err != nil {
+		t.Fatalf("stat config: %v", err)
+	} else if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("config.toml perm = %#o, want 0600", perm)
+	}
+}
+
 // TestInitOllamaOverrideDownExitsNonZero: when the user EXPLICITLY forces
 // VESKA_EMBEDDER=ollama, init still probes and hard-fails (with the install
 // hint) if Ollama is down - the only path that requires Ollama.
