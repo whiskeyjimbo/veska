@@ -1,8 +1,15 @@
 
 # Beads / Dolt files (added by bd init)
 .dolt/
+.beads/
 *.db
 .beads-credential-key
+
+.claude/
+AGENTS.md
+CLAUDE.md
+
+.vscode/
 
 # Binaries
 /driver
