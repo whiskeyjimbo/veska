@@ -28,19 +28,19 @@ Show
 # Beat 1 — semantic search returns grounded spans, ranked by tier.
 Type "# Ask in plain English. Get exact file:line spans, not grep guesses." Sleep 800ms Enter
 Sleep 600ms
-Type 'veska search "parse config"' Sleep 400ms Enter
+Type 'veska search "promote staged changes atomically"' Sleep 400ms Enter
 Sleep 3500ms
 
-# Beat 2 — jump from a result to the exact symbol.
-Type "# Know the name? Exact, deterministic lookup." Sleep 800ms Enter
+# Beat 2 — jump from a behavior hit to the exact symbol.
+Type "# Found it by behavior. Now pin the exact symbol." Sleep 800ms Enter
 Sleep 400ms
-Type "veska symbol Load" Sleep 400ms Enter
+Type "veska symbol Promoter.Promote" Sleep 400ms Enter
 Sleep 3000ms
 
 # Beat 3 — trace the call graph without opening a file.
 Type "# Trace what it reaches — straight from the parsed graph." Sleep 800ms Enter
 Sleep 400ms
-Type "veska calls Load" Sleep 400ms Enter
+Type "veska calls Promoter.Promote" Sleep 400ms Enter
 Sleep 3500ms
 
 # Closing beat — the whole thing is local + zero-setup.
