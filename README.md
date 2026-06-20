@@ -38,7 +38,8 @@ they reason from the same structural ground truth instead of guessing.
   `structural` (Type-2, same shape after renaming), and `near` tiers, ranked
   tightest first. Exact/structural are deterministic hashes; near reads the
   similarity scores auto-link already stored (no new embedding sweep).
-- **Optional LLM review.** An off-by-default post-promotion review pipeline.
+- **Optional LLM features.** An off-by-default post-promotion review pipeline
+  and per-node summaries (Ollama-backed).
 - **Mechanical wiki.** Hot-zones and entry-points computed from the graph,
   no LLM in the path. The `eng_get_hot_zone` and `eng_get_entry_points`
   MCP tools return data in-memory and write nothing; the `veska wiki`
@@ -90,12 +91,13 @@ No Ollama, no network, and no separate process is required for search.
 
 ### Optional: Ollama
 
-Ollama is **only** for the optional **LLM review pipeline** (off by default).
-It is **not** used for embeddings in the default config. (Power users can force
-an Ollama embedding model with `VESKA_EMBEDDER=ollama`, but model2vec is faster
+Ollama is **only** for the optional **LLM features** - the post-promotion
+**review pipeline** and per-node **summaries** (both off by default). It is
+**not** used for embeddings in the default config. (Power users can force an
+Ollama embedding model with `VESKA_EMBEDDER=ollama`, but model2vec is faster
 and higher-quality on code, so this is rarely worthwhile.)
 
-Install Ollama only if you want the review pipeline:
+Install Ollama only if you want those LLM features:
 
 ```sh
 # macOS:        brew install ollama && ollama serve &
@@ -301,7 +303,7 @@ Key environment variables:
 | `VESKA_HOME` | Data root | `~/.veska` |
 | `VESKA_EMBEDDER` | Embedder election: `auto` (model2vec→static-v2), or force `model2vec` / `static` / `ollama` | `auto` |
 | `VESKA_VECTOR_BACKEND` | `memory` (in-process `memvec` linear scan) or `usearch` (HNSW) | `memory` |
-| `VESKA_OLLAMA_URL` | Ollama endpoint - review pipeline, and `VESKA_EMBEDDER=ollama` | `http://localhost:11434` |
+| `VESKA_OLLAMA_URL` | Ollama endpoint - LLM review + summaries, and `VESKA_EMBEDDER=ollama` | `http://localhost:11434` |
 | `VESKA_EMBED_MODEL` | Ollama embedding model - only when `VESKA_EMBEDDER=ollama` | `nomic-embed-text` |
 
 The elected embedder is recorded in `~/.veska/embedder.locked`. Switching
