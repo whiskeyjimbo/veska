@@ -1,10 +1,13 @@
 # Veska
 
+
+[![Quickstart](https://img.shields.io/badge/Quick_Start-blue)](https://whiskeyjimbo.github.io/veska/getting-started/quickstart/)
 [![CI](https://github.com/whiskeyjimbo/veska/actions/workflows/ci.yml/badge.svg)](https://github.com/whiskeyjimbo/veska/actions/workflows/ci.yml)
 [![Docs](https://github.com/whiskeyjimbo/veska/actions/workflows/docs.yml/badge.svg)](https://github.com/whiskeyjimbo/veska/actions/workflows/docs.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/whiskeyjimbo/veska)](https://goreportcard.com/report/github.com/whiskeyjimbo/veska)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/whiskeyjimbo/veska)](go.mod)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
+
 
 > **Give your AI coding agent real structural understanding of your codebase.**
 > Veska parses your repo into a queryable code graph + semantic index and serves
