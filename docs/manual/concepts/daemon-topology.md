@@ -28,12 +28,13 @@ The daemon is the single writer. Everything Veska knows lives under `~/.veska/`
 
 ## How the pieces talk
 
-```
-editor  ──stdio JSON-RPC──▶  veska-mcp  ──Unix socket──▶  veska-daemon
-                                                              │
-  veska CLI  ──Unix socket──────────────────────────────────┤  owns ~/.veska/
-                                                              │  (SQLite, vectors,
-  git post-commit hook  ──▶  veska  ──promote──▶  daemon      │   watcher, embedder)
+```mermaid
+flowchart LR
+    editor[editor] -->|stdio JSON-RPC| mcp[veska-mcp]
+    mcp -->|Unix socket| daemon[veska-daemon]
+    cli[veska CLI] -->|Unix socket| daemon
+    hook[git post-commit hook] -->|promote| veska[veska] -->|Unix socket| daemon
+    daemon --> store[("owns ~/.veska/<br/>SQLite · vectors · watcher · embedder")]
 ```
 
 Most CLI commands (`reindex`, `repo add`, search) **dispatch through the
