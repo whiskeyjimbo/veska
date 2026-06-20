@@ -13,7 +13,7 @@ Pinned shape:
  10. eng_list_findings + eng_list_suppressions respond cleanly
 
 If this test passes, a new user running 'veska init && veska repo add'
-followed by their IDE's MCP queries gets the documented behaviour end
+followed by their IDE's MCP queries gets the documented behavior end
 to end. If it fails, exactly one of the integration seams broke; the
 per-tool tests narrow which one.
 

@@ -170,7 +170,7 @@ func pollEmbedderDrain(ctx context.Context, refs *sqlite.EmbeddingRefsRepo, w io
 
 // EphemeralEnsureFromURL implements the URL-target half of `veska search`
 // Steps:
-//  1. canonicalise the URL
+//  1. canonicalize the URL
 //  2. consult canonical_url for an existing row (tracked or ephemeral) - if
 //     hit, reuse it (and bump last_accessed_at when ephemeral); no clone. AC3:
 //     ephemeral hit whose cache dir vanished triggers a silent re-clone

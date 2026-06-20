@@ -76,7 +76,7 @@ func TestSetCanonicalURL_RoundTrip(t *testing.T) {
 	}
 	// Stored value must be the canonical HTTPS representation.
 	if got != "https://github.com/foo/bar" {
-		t.Errorf("canonical_url = %q, want canonicalised https form", got)
+		t.Errorf("canonical_url = %q, want canonicalized https form", got)
 	}
 }
 

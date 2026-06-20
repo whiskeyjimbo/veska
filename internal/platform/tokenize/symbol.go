@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Package tokenize provides pure-Go helpers that pre-tokenise symbol-bearing
+// Package tokenize provides pure-Go helpers that pre-tokenize symbol-bearing
 // strings (kind, symbol_path, name) into a whitespace-joined form suitable
 // for indexing by FTS5's built-in unicode61 tokenizer.
-// Why pre-tokenise in Go rather than register a custom FTS5 tokenizer?
+// Why pre-tokenize in Go rather than register a custom FTS5 tokenizer?
 // Custom tokenizers are platform-specific and brittle to wire through
-// database/sql. Pre-tokenising on the write path lets unicode61 do what
+// database/sql. Pre-tokenizing on the write path lets unicode61 do what
 // it already does well - lower-case folding, diacritic stripping,
 // latin-script word splitting - while the upstream Go code is responsible
 // for the splits unicode61 cannot make (camelCase, snake_case, `::`, `.`).
@@ -40,7 +40,7 @@ func Symbol(text string) string {
 
 	// First, emit the whole input as one chunk with non-alnum runes
 	// converted to spaces. This preserves the "raw" string in a form
-	// that unicode61 can tokenise - e.g. "pkg/api.closeFinding" →
+	// that unicode61 can tokenize - e.g. "pkg/api.closeFinding" →
 	// "pkg api closeFinding".
 	flattened := flattenNonAlnum(text)
 	out.WriteString(flattened)

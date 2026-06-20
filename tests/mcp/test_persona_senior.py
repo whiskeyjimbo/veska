@@ -60,7 +60,7 @@ def test_senior_depth_and_recovery(tmp_path: Path):
         assert COVERED_SYMBOL in br_syms, \
             f"caller {COVERED_SYMBOL} not in normalizeName blast radius: {br_syms}"
 
-        # ── S3: context pack is the token-bounded neighbourhood ───────────
+        # ── S3: context pack is the token-bounded neighborhood ───────────
         print("[S3] context pack for GreetUser")
         pack = ws.mcp.result("eng_get_context_pack", {
             "repo_id": ws.repo_id, "branch": ws.branch, "symbol": COVERED_SYMBOL,

@@ -699,7 +699,7 @@ func TestMigration0007_FTSWordsAndTrigramsQueryable(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Pre-tokenised words: kind + symbol_path + name with camelCase split.
+	// Pre-tokenized words: kind + symbol_path + name with camelCase split.
 	if _, err := db.Exec(
 		`INSERT INTO node_fts_words (node_id, branch, repo_id, words) VALUES (?, ?, ?, ?)`,
 		"n1", "main", "repo-fts",

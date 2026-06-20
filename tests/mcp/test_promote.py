@@ -30,7 +30,7 @@ def test_promote_repo_unknown_root_errors(mcp_client):
     ok, text, _, _ = mcp_client.call("eng_promote_repo", {"root_path": "/nonexistent/path/zzz"})
     assert not ok
     assert "not registered" in text.lower(), (
-        "want a clear 'not registered' error to differentiate from silent legacy behaviour"
+        "want a clear 'not registered' error to differentiate from silent legacy behavior"
     )
 
 

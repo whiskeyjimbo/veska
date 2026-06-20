@@ -13,7 +13,7 @@ from typing import Iterator
 
 
 def veska_db_path() -> str:
-    """Resolve the on-disk path of the veska SQLite database, honouring
+    """Resolve the on-disk path of the veska SQLite database, honoring
     VESKA_HOME. Mirrors internal/config.veskaHome's default of ~/.veska."""
     home = os.environ.get("VESKA_HOME")
     if not home:

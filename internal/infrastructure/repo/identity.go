@@ -113,7 +113,7 @@ func moduleHostPathAnchor(mod string) (string, bool) {
 
 // RepoIDForPath resolves symlinks and obtains the absolute path to generate a stable repository ID.
 func RepoIDForPath(path string) string {
-	canonical, err := canonicalise(path)
+	canonical, err := canonicalize(path)
 	if err != nil {
 		canonical = path
 	}
@@ -150,8 +150,8 @@ func validateRepoRoot(canonical string) error {
 	}
 }
 
-// canonicalise returns the absolute, symlink-resolved path for root.
-func canonicalise(root string) (string, error) {
+// canonicalize returns the absolute, symlink-resolved path for root.
+func canonicalize(root string) (string, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return "", fmt.Errorf("abs path: %w", err)

@@ -59,7 +59,7 @@ If an investigation by the Community Moderators finds that this Code of Conduct 
 1) Warning
    1) Event: A violation involving a single incident or series of incidents.
    2) Consequence: A private, written warning from the Community Moderators.
-   3) Repair: Examples of repair include a private written apology, acknowledgement of responsibility, and seeking clarification on expectations.
+   3) Repair: Examples of repair include a private written apology, acknowledgment of responsibility, and seeking clarification on expectations.
 2) Temporarily Limited Activities
    1) Event: A repeated incidence of a violation that previously resulted in a warning, or the first incidence of a more serious violation.
    2) Consequence: A private, written warning with a time-limited cooldown period designed to underscore the seriousness of the situation and give the community members involved time to process the incident. The cooldown period may be limited to particular communication channels or interactions with particular community members.

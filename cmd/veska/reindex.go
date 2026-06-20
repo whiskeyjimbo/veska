@@ -32,7 +32,7 @@ func defaultReparserFactory(pools *sqlite.Pools, loader application.IgnoreLoader
 	return composition.NewCLIColdScanReparser(pools, loader)
 }
 
-// matchByPath canonicalises path with EvalSymlinks (matching the repo
+// matchByPath canonicalizes path with EvalSymlinks (matching the repo
 // registry's stored form) and returns the registered repo whose RootPath
 // equals it. An unregistered path is a typed error. It is a cmd-owned seam
 // shared with `veska search` (searchcmd.RunOpts.MatchByPath) and reindexcmd.

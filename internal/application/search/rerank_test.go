@@ -10,7 +10,7 @@ import (
 // splitIdentifier
 // The stems-aware matcher ( signal "b") needs to take an
 // identifier and produce its lowercased subwords. Pinning the
-// tokenisation independently from the rerank logic keeps the boundary
+// tokenization independently from the rerank logic keeps the boundary
 // rules explicit: camelCase, PascalCase, snake_case, dotted symbol
 // paths, and acronym runs (HTTPServer → http, server) all need to land
 // on the same subword set.

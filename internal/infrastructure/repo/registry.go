@@ -151,7 +151,7 @@ func Add(ctx context.Context, db *sql.DB, rootPath string) (string, bool, error)
 		return "", false, fmt.Errorf("repo add: %w", err)
 	}
 
-	canonical, err := canonicalise(rootPath)
+	canonical, err := canonicalize(rootPath)
 	if err != nil {
 		return "", false, err
 	}

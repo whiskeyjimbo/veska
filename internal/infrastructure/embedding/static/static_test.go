@@ -88,7 +88,7 @@ func TestProvider_DifferentInputsProduceDifferentVectors(t *testing.T) {
 	}
 }
 
-// TestProvider_EmptyInputDoesNotPanic: tokenising an empty (or
+// TestProvider_EmptyInputDoesNotPanic: tokenizing an empty (or
 // whitespace-only) string yields zero tokens; the embedder must
 // still return a finite, L2-normalized vector instead of NaN or 0/0.
 func TestProvider_EmptyInputDoesNotPanic(t *testing.T) {

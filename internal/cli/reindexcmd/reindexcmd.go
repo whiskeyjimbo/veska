@@ -170,7 +170,7 @@ func MergeTarget(stderr io.Writer, args []string, repoFlag string) string {
 
 // resolveTargetForDial converts the user-supplied target into a (repoID,
 // rootPath) pair suitable for eng_reindex_repo. When target is empty, the CWD
-// is used as the rootPath (daemon canonicalises). A non-empty target is passed
+// is used as the rootPath (daemon canonicalizes). A non-empty target is passed
 // through as repoID first; the daemon falls back to NotFound rather than the
 // CLI guessing, which keeps the resolution rules in one place. A target that
 // exists as a directory is sent as rootPath instead so the daemon resolves by
@@ -194,9 +194,9 @@ func resolveTargetForDial(_ context.Context, target string) (repoID, rootPath st
 }
 
 // resolveReindexTarget picks the repo to reindex. With no target, the cwd is
-// canonicalised and matched against every registered repo's RootPath; with a
+// canonicalized and matched against every registered repo's RootPath; with a
 // target, it is treated first as a repo id (or short_id/alias/prefix) and, on
-// miss, as a path (canonicalised + matched against List). matchByPath is the
+// miss, as a path (canonicalized + matched against List). matchByPath is the
 // cmd-owned cwd→repo seam shared with `veska search`.
 func resolveReindexTarget(ctx context.Context, db *sql.DB, target string, matchByPath func(context.Context, *sql.DB, string) (repo.Record, error)) (repo.Record, error) {
 	if target == "" {

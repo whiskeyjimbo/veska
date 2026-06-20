@@ -2,7 +2,7 @@
 
 mode='exact' (the default) groups symbols whose source text is byte-identical;
 the tool is read-only, so these run against the live promoted graph without
-seeding. We assert the contract (responds, well-shaped, mode honoured) rather
+seeding. We assert the contract (responds, well-shaped, mode honored) rather
 than the presence of clones, which is corpus-dependent."""
 
 from __future__ import annotations

@@ -364,7 +364,7 @@ func TestWire_StartWatchesRegisteredRepos(t *testing.T) {
 // TestWire_WatchLoopRoutesEditsToStaging exercises the end-to-end fsnotify
 // chain we cared about in: file write in a watched repo →
 // MultiRepoWatcher → runWatchLoop → Ingester.Save → StagingArea contains the
-// file under the repo's active_branch. Parameterised over branch to make sure
+// file under the repo's active_branch. Parameterized over branch to make sure
 // the hardcoded "main" regression doesn't reappear.
 func TestWire_WatchLoopRoutesEditsToStaging(t *testing.T) {
 	for _, branch := range []string{"main", "trunk"} {

@@ -56,7 +56,7 @@ type Handler struct {
 	now     func() time.Time
 }
 
-// HandlerOption customises a Handler.
+// HandlerOption customizes a Handler.
 type HandlerOption func(*Handler)
 
 // WithAuditWriter records a system-actor audit line per summarized file so the

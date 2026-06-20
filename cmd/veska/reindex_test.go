@@ -27,7 +27,7 @@ import (
 
 // setupReindexEnv creates a temp VESKA_HOME with a migrated veska.db and a
 // single registered git-backed repo. The repo is registered via repo.Add so
-// the canonicalised path and generated id mirror production.
+// the canonicalized path and generated id mirror production.
 func setupReindexEnv(t *testing.T) (repoRoot, repoID string) {
 	t.Helper()
 
@@ -58,7 +58,7 @@ func setupReindexEnv(t *testing.T) (repoRoot, repoID string) {
 		t.Fatalf("repo.Add: %v", err)
 	}
 	// Resolve the canonical root that repo.Add stored, so the test can
-	// chdir into it (repo.Add EvalSymlinks-canonicalises the path).
+	// chdir into it (repo.Add EvalSymlinks-canonicalizes the path).
 	rec, err := repo.Get(context.Background(), db, id)
 	if err != nil || rec.RepoID == "" {
 		t.Fatalf("repo.Get: %v (rec=%+v)", err, rec)

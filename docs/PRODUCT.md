@@ -203,7 +203,7 @@ and you want to share state without uploading anything yourself,
 attach to a GitHub issue. Source code, node bodies,
 embedding bytes, and LLM payloads are excluded; secret-shaped
 config keys are redacted. The bundle is operator data, not
-sanitised data - open it before sharing. Nothing leaves your
+sanitized data - open it before sharing. Nothing leaves your
 machine until you send the file yourself.
 
 ## What it costs

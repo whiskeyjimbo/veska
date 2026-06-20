@@ -98,7 +98,7 @@ func makePromoteHandler(deps PromoteDeps) ToolHandler {
 			}
 			canon = rec.RootPath
 		} else {
-			// Canonicalise so the lookup matches the canonical form repo.Add stored.
+			// Canonicalize so the lookup matches the canonical form repo.Add stored.
 			canon, err = filepath.EvalSymlinks(p.RootPath)
 			if err != nil {
 
