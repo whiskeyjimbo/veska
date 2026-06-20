@@ -1,4 +1,4 @@
-"""Junior-Dev persona workflow (solov2-nmps.3).
+"""Junior-Dev persona workflow.
 
 A junior engineer's adoption-critical happy path, walked end-to-end against the
 real daemon over the synthetic repo. Maps to the SOLO-02 stories:

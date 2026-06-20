@@ -6,7 +6,7 @@ DAEMON_BIN      := $(BINDIR)/veska-daemon
 MCP_BIN         := $(BINDIR)/veska-mcp
 LAYERCHECK_BIN  := $(BINDIR)/layercheck
 
-# solov2-jkgp: SQLite driver is `github.com/mattn/go-sqlite3` (cgo +
+# SQLite driver is `github.com/mattn/go-sqlite3` (cgo +
 # sqlite_fts5 are mandatory; the lexical-fallback path uses FTS5 virtual
 # tables). tree-sitter requires cgo anyway, so there is no no-cgo build.
 SQLITE_TAGS    ?= sqlite_fts5
@@ -33,7 +33,7 @@ build: fetch-embed-assets
 # `veska install model2vec`. Intended for CI / container layers where the
 # ~62MB embed bloat matters more than first-run UX.
 #
-# solov2-izh6.32: 'build' and 'build-small' both produce $(VESKA_BIN), so
+# 'build' and 'build-small' both produce $(VESKA_BIN), so
 # the file-target rule for $(VESKA_BIN) was skipped when running build-
 # small after build (and vice versa) - make sees an existing artifact and
 # does nothing, leaving the user with the wrong-mode binary they already
@@ -91,7 +91,7 @@ $(VESKA_BIN):
 $(LAYERCHECK_BIN):
 	go build -o $@ ./tools/lint/layercheck/cmd
 
-# build-sizes (solov2-izh6.29): measure thin and fat binary sizes so
+# build-sizes: measure thin and fat binary sizes so
 # README numbers stay in sync with reality. Cleans bin/veska between
 # runs because $(VESKA_BIN) is the same path for both modes - without
 # the clean, make sees an existing artifact and skips the rebuild.
@@ -145,7 +145,7 @@ release-archive: build
 test:
 	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS)" ./...
 
-# test-race: race-detector run with package parallelism pinned to 1 (solov2-ozoi.3).
+# test-race: race-detector run with package parallelism pinned to 1.
 # TestToolCoverage builds a full isolated harness (sqlite + memvec + static
 # embedder + cold-scan) per leaf; under `go test -race ./...` the detector
 # inflates peak RSS ~5-10x, and when this heavy package overlaps with others it
@@ -156,7 +156,7 @@ test:
 test-race:
 	$(SQLITE_CGO_ENV) go test -race -p 1 -tags "$(SQLITE_TAGS)" ./...
 
-# tool-test: run the in-process MCP tool-coverage suite (solov2-ti9x). Narrow to
+# tool-test: run the in-process MCP tool-coverage suite. Narrow to
 # a family and/or tool with FAMILY=/TOOL= which append to the -run subtest path,
 # e.g. `make tool-test FAMILY=graph TOOL=eng_get_node`.
 TOOLTEST_RUN := TestToolCoverage
@@ -169,7 +169,7 @@ endif
 tool-test:
 	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS)" -run '$(TOOLTEST_RUN)' ./internal/cli/daemon/...
 
-# tool-test-e2e: on-demand socket end-to-end harness (solov2-t9kg). Build-tag
+# tool-test-e2e: on-demand socket end-to-end harness. Build-tag
 # gated behind `socket_e2e` so it stays out of the default test path; it drives
 # the real daemon Unix-socket JSON-RPC round-trip through the registry.
 tool-test-e2e:
@@ -183,7 +183,7 @@ lint:
 	$(MAKE) lint-size
 
 # lint-size: enforce the <=50 LOC / <=15 cyclomatic / <=5 args bar on CHANGED
-# code only (solov2-u4mv.7). LINT_SIZE_BASE is the ref the diff is taken
+# code only. LINT_SIZE_BASE is the ref the diff is taken
 # against - default 'main'; override (e.g. LINT_SIZE_BASE=origin/main) in CI.
 LINT_SIZE_BASE ?= main
 lint-size:
@@ -192,7 +192,7 @@ lint-size:
 layercheck: $(LAYERCHECK_BIN)
 	$(LAYERCHECK_BIN) .
 
-# fatfile-ratchet (solov2-0omh.3): per-FILE total-LOC ratchet. Reads the
+# fatfile-ratchet: per-FILE total-LOC ratchet. Reads the
 # checked-in inventory (tools/lint/fatfiles/inventory.txt) of already-oversized
 # files and fails if any has GROWN past its recorded ceiling. Complements
 # lint-size (per-function, changed-code-only) by shrinking the fat-file backlog
@@ -209,7 +209,7 @@ noidleak:
 
 # cliparity: every registered MCP tool must either be wrapped by a
 # cobra subcommand (declared in tools/lint/cliparity/wrapped.txt) or be
-# marked CLIExempt on its ToolSpec literal (solov2-xomk, solov2-4ygz).
+# marked CLIExempt on its ToolSpec literal.
 cliparity:
 	go run ./tools/lint/cliparity
 
@@ -311,7 +311,7 @@ eval-recall-projection:
 eval-autolink-fp:
 	AUTOLINK_POP=$${AUTOLINK_POP:-1000} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestAutolinkFP ./tools/loadtest/autolink/ -v
 
-# eval-neardup-threshold: near-duplicate threshold calibration (solov2-md3n).
+# eval-neardup-threshold: near-duplicate threshold calibration.
 # Embeds a curated corpus of real Go functions + mechanical near-dup variants
 # through model2vec (potion-code-16M, compiled in via embed_model - no service)
 # and, when Ollama is reachable, nomic-embed-text; reports per-tier score
@@ -327,7 +327,7 @@ eval-neardup-threshold:
 eval-revalidate-bench:
 	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRevalidateBench ./tools/loadtest/revalidate/ -v -count=1 -timeout=120s
 
-# eval-wake-latency: solov2-xde2.25.4 - wake-reconcile sweep latency gate.
+# eval-wake-latency - wake-reconcile sweep latency gate.
 # Times git.WakeReconciler's no-change mtime/size/prefix walk over a
 # synthetic tree and asserts the SOLO-03 §5.2 NFR: typical-repo p95 < 500ms
 # and a single >50k-file sweep < 5s. The git package needs no sqlite tags.
@@ -335,7 +335,7 @@ eval-revalidate-bench:
 eval-wake-latency:
 	go test -tags eval -run TestWakeLatency ./tools/loadtest/wakelatency/ -v -count=1 -timeout=120s
 
-# eval-dbbench: solov2-6e5r - compare Go SQLite drivers (mattn, zombiezen)
+# eval-dbbench: compare Go SQLite drivers (mattn, zombiezen)
 # against veska's storage workloads. Pure-Go variant (zombiezen only).
 # Writes tools/loadtest/dbbench/RESULTS.md. See README.
 eval-dbbench:
@@ -415,7 +415,7 @@ eval-embed-models-fuse:
 eval-review-timing:
 	REVIEW_TIMING_FILE_N=$${REVIEW_TIMING_FILE_N:-100} go test -tags=eval -run TestReviewTiming ./tools/loadtest/reviewtiming/ -v -timeout=12000s
 
-# eval-share-vs-regenerate: solov2-z0jz - ADR-S0019 §4 empirical gate. Times the
+# eval-share-vs-regenerate: Times the
 # parse + embed pipeline stages on a real library and reports the breakeven
 # bandwidth per derived-artifact family (the link speed above which sharing beats
 # local regeneration). Runs with no external service (elected embedder is
@@ -425,7 +425,7 @@ eval-review-timing:
 eval-share-vs-regenerate:
 	go test -tags=eval -run TestShareVsRegenerate ./tools/loadtest/share-vs-regenerate/ -v -timeout=1800s
 
-# eval-token-efficiency: solov2-wise - produce the semble-shaped
+# eval-token-efficiency: produce the semble-shaped
 # "tokens saved vs grep+read" figure, paired with recall@10 on the same
 # corpus. Pure-Go simulation (no rg subprocess); cl100k_base tokenizer.
 # Writes tools/loadtest/tokenefficiency/results.json + a one-line
@@ -434,9 +434,9 @@ eval-share-vs-regenerate:
 eval-token-efficiency:
 	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run '^TestTokenEfficiency$$' ./tools/loadtest/tokenefficiency/ -v -count=1 -timeout=120s
 
-# eval-token-efficiency-multirepo: solov2-kcmo - the WEDGE headline.
+# eval-token-efficiency-multirepo: the WEDGE headline.
 # Partitions the synthcorpus across N repos and measures veska's
-# cross-repo fanout + global RRF (the work shipped in solov2-bcn) vs
+# cross-repo fanout + global RRF vs
 # grep+read across every repo's file tree. Writes
 # tools/loadtest/tokenefficiency/results-multirepo.json + a multi-repo
 # one-line summary. Knobs: TOKEFF_REPOS (default 5), TOKEFF_NODES_PER_CLUSTER.

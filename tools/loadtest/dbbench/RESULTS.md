@@ -2,8 +2,6 @@
 
 Generated: 2026-05-26T20:22:45Z
 
-Source issue: solov2-6e5r
-
 ## Environment
 
 | Key | Value |

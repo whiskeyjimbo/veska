@@ -236,7 +236,7 @@ func TestSuppressFinding_WithExpiresAt(t *testing.T) {
 
 // repo_id resolution for scope='finding' must accept a short prefix, the full
 // id, or omission - matching eng_close_finding / eng_get_finding. A genuinely
-// different repo_id must still be rejected. Regression: solov2-9xwc.
+// different repo_id must still be rejected.
 func TestSuppressFinding_RepoIDResolutionParity(t *testing.T) {
 	const fullRepoID = "1436fd395322aabbccddeeff00112233445566778899aabbccddeeff00112233"
 	const shortRepoID = "1436fd395322"

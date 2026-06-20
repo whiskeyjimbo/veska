@@ -16,7 +16,7 @@ ALL_TOOLS = {
     # repo lifecycle
     "eng_add_repo",
     "eng_remove_repo",
-    "eng_promote_repo",  # solov2-3vv post-commit hook target
+    "eng_promote_repo",  # post-commit hook target
     # graph
     "eng_find_symbol",
     "eng_get_node",
@@ -37,7 +37,7 @@ ALL_TOOLS = {
     "eng_find_todos",
     # owner
     "eng_find_owner",
-    # tasks (PARKED - solov2-6m1; no MCP path to create a task, so the
+    # tasks (PARKED - no MCP path to create a task, so the
     # set/get/history tools are unregistered until a backend lands).
     # findings
     "eng_list_findings",
@@ -53,7 +53,7 @@ ALL_TOOLS = {
     "eng_get_hot_zone",
     "eng_get_entry_points",
     # clones / similarity
-    "eng_find_clones",  # solov2-wfrj
+    "eng_find_clones", 
     "eng_find_related",
     # dependencies
     "eng_list_dependencies",
@@ -93,7 +93,7 @@ def test_all_tools_matches_live_catalog(mcp_client):
     ALL_TOOLS (or vice-versa) fails here with the exact diff, so the
     hardcoded set above can't silently drift from what the server serves -
     the failure mode that left ALL_TOOLS stale at 31 while wire.go shipped
-    37 (solov2-seut cleanup)."""
+    37."""
     _, text, _, result = mcp_client.call("tools/list", {})
     live = {t["name"] for t in (result.get("tools") or [])}
     assert live, f"tools/list returned no tools: {text}"

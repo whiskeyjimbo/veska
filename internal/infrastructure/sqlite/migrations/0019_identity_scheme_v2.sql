@@ -1,4 +1,4 @@
--- 0019: ADR-S0017 node-identity scheme change (solov2-dchd).
+-- 0019: ADR-S0017 node-identity scheme change.
 --
 -- node_id and nodes.file_path now key on the repo-relative slash path (§1) and a
 -- portable repo-identity tier (§2). The graph is a pure function of (source,

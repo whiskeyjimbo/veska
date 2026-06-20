@@ -1,4 +1,4 @@
-"""Self-contained persona-workflow harness (solov2-nmps.1).
+"""Self-contained persona-workflow harness.
 
 Every persona test (junior / senior / agent) needs the same thing: a real
 daemon running against a *realistic* code graph it can drive end-to-end. This

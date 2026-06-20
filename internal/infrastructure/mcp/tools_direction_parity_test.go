@@ -14,7 +14,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 )
 
-// These tests pin the direction-enum parity contract (solov2-py5m): the three
+// These tests pin the direction-enum parity contract: the three
 // graph-traversal tools must accept BOTH vocabularies as aliases -
 // in==callers (inbound), out==callees (outbound), both==both - and produce
 // identical results for the equivalent pair, while still rejecting unknown

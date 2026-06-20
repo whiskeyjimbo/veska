@@ -1,8 +1,8 @@
-"""Senior-Dev persona workflow (solov2-nmps.4).
+"""Senior-Dev persona workflow.
 
 A senior engineer exercises the depth a junior doesn't: structural onboarding,
 blast-radius / context-pack reasoning, suppression governance, and recovery
-across a daemon restart. Maps to SOLO-02:
+across a daemon restart:
 
   S1  structural onboard   US-08.01  entry_points / hot_zone
   S2  blast radius         US-04.02  eng_get_blast_radius over a real edge

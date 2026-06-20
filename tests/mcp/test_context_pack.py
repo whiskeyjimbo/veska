@@ -25,7 +25,7 @@ def test_context_pack_by_symbol(mcp_client, repo_id, branch, target_symbol):
 
 
 def test_context_pack_branch_defaults_to_active(mcp_client, repo_id, target_symbol):
-    """branch was required pre-solov2-5vu1; now it defaults to the
+    """branch was required; now it defaults to the
     registered active_branch when omitted. Omitting branch should
     succeed (not error)."""
     ok, text, _, result = mcp_client.call("eng_get_context_pack", {

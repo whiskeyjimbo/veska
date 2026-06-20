@@ -195,7 +195,7 @@ func TestDispatch_ToolsCallRoutesByName(t *testing.T) {
 
 // TestDispatch_FlatPathReturnsBarePayload pins that the legacy flat-dispatch
 // path (method == tool name, used by the CLI via mcpclient) is NOT wrapped in
-// the CallToolResult envelope - only tools/call is (solov2-z3mu).
+// the CallToolResult envelope - only tools/call is.
 func TestDispatch_FlatPathReturnsBarePayload(t *testing.T) {
 	r := NewRegistry()
 	r.MustRegister(ToolSpec{

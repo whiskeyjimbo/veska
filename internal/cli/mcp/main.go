@@ -23,7 +23,7 @@ const (
 	// dialRetryWindow bounds how long the shim retries the daemon socket on a
 	// cold editor start (daemon not yet listening when the editor launches the
 	// shim). Kept short to stay inside the MCP client's own initialize timeout
-	// so we never get killed mid-retry (solov2-s2ux).
+	// so we never get killed mid-retry.
 	dialRetryWindow  = 8 * time.Second
 	dialRetryBackoff = 250 * time.Millisecond
 )
@@ -33,8 +33,8 @@ var ErrDaemonNotRunning = errors.New("daemon not running")
 
 // dialWithRetry dials the daemon socket, retrying for up to dialRetryWindow.
 // Without this a shim launched before the daemon is listening connects to
-// nothing and registers zero tools - silently - for the whole editor session
-// (solov2-s2ux). Returns ErrDaemonNotRunning (wrapped) once the window expires
+// nothing and registers zero tools - silently - for the whole editor session.
+// Returns ErrDaemonNotRunning (wrapped) once the window expires
 // or ctx is canceled.
 func dialWithRetry(ctx context.Context, sockPath string) (net.Conn, error) {
 	deadline := time.Now().Add(dialRetryWindow)

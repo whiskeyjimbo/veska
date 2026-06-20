@@ -50,7 +50,7 @@ def test_add_and_remove_repo_roundtrip(mcp_client):
 
 
 def test_add_repo_idempotency_returns_already_registered(mcp_client):
-    """solov2-khjd: a second eng_add_repo against the same root_path must
+    """A second eng_add_repo against the same root_path must
     report already_registered=true + scan_pending=false (no duplicate
     cold-scan dispatched) while still returning the original repo_id."""
     with tempfile.TemporaryDirectory(prefix="veska-mcp-test-") as tmp:

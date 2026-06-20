@@ -20,7 +20,7 @@ def test_list_suppressions_responds(mcp_client, repo_id, branch):
 
 
 def test_list_suppressions_repo_id_defaults_with_single_repo(mcp_client):
-    """solov2-7tz1: when exactly one repo is registered, eng_list_suppressions
+    """when exactly one repo is registered, eng_list_suppressions
     must auto-resolve repo_id from the singleton instead of erroring."""
     ok, _, _, list_result = mcp_client.call("eng_list_repos", {})
     assert ok
@@ -69,7 +69,7 @@ def test_suppress_then_close_roundtrip(mcp_client, repo_id, branch, open_finding
 
 
 def test_suppress_finding_rejects_unknown_id(mcp_client, repo_id, branch):
-    """solov2-b36: scope='finding' (the default) must verify the finding
+    """scope='finding' (the default) must verify the finding
     actually exists. Previously this silently inserted an orphan row that
     polluted eng_list_suppressions forever."""
     ok, text, _, _ = mcp_client.call("eng_suppress_finding", {

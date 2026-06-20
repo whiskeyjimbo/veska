@@ -78,7 +78,7 @@ Personas and stories are defined in the archived design set (under `docs/design/
 > **Parked:** SOLO-02's task-anchored Agent stories (US-04.02 / US-09.02 -
 > `eng_set_active_task`, task-mode `context_pack`, `eng_get_task_history`) are
 > **not reachable on the live MCP surface** (`RegisterTaskTools` is parked off
-> the daemon; no MCP path to create a task). Tracked by **solov2-nmps.10**; the
+> the daemon; no MCP path to create a task). the
 > agent test grows a task-scoping phase when they re-enable.
 
 ## Coverage gate - `make persona-parity`
@@ -95,9 +95,7 @@ wraps these same tools).
 
 Driving the *real* binary turned up real gaps (the point of the suite):
 
-- **solov2-nmps.9** - `diff-gate` dead-code resolution counts the structural
+- `diff-gate` dead-code resolution counts the structural
   `CONTAINS` parent edge as a caller, so every dead-code finding reads
   `target_resolved: true` with no fix (false GREEN). The junior gate anchors on
   `diff-gate untested` (sound) until this lands.
-- **solov2-nmps.10** - the Agent task-scoping tools are parked off the live
-  surface, but SOLO-02 marks their stories "shipped" (doc/coverage mismatch).

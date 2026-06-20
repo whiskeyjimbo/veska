@@ -1,4 +1,4 @@
--- solov2-7w1t — User-defined repo aliases. A separate table (not a column)
+-- User-defined repo aliases. A separate table (not a column)
 -- so multiple aliases per repo are allowed and the relationship stays
 -- reversible without rewriting the parent row.
 --

@@ -54,7 +54,7 @@ fi
 mkdir -p "$dest"
 
 # Install the one veska binary; veska-daemon and veska-mcp are symlinks to
-# it (solov2-brw6 consolidated the three argv[0] personas into one binary).
+# it (consolidated the three argv[0] personas into one binary).
 cp -f "$src_bin/veska" "$dest/veska"
 chmod 0755 "$dest/veska"
 ln -sf veska "$dest/veska-daemon"

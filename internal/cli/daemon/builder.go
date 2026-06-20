@@ -200,8 +200,8 @@ func (b *daemonBuilder) openStorage() error {
 	b.buildIngestionBusy(defaultAvailMem)
 
 	// One-shot startup advisory: warn when the in-memory vector backend is
-	// elected on a low-RAM host, since memvec keeps every vector in RAM
-	// (solov2-btpj). Mirrors the static-embedder WARN in electEmbedder.
+	// elected on a low-RAM host, since memvec keeps every vector in RAM.
+	// Mirrors the static-embedder WARN in electEmbedder.
 	maybeWarnLowMemory(b.cfg.VectorBackend, b.availMem, slog.Default())
 
 	vec, err := vector.NewVectorStorage(b.cfg.VectorBackend, b.cfg.VeskaHome)
@@ -216,7 +216,7 @@ func (b *daemonBuilder) openStorage() error {
 // buildIngestionBusy installs the scan tracker and the shared ingestion-busy
 // predicate ( + 8ga): the queue poller and the embedder worker both hold writes
 // off while a cold-scan or startup resync is committing, AND now also while the
-// host is under memory pressure (solov2-btpj) so both lanes skip their tick and
+// host is under memory pressure so both lanes skip their tick and
 // let RAM recover instead of pushing the daemon toward OOM. resyncRef is filled
 // in by finalize; the closure reads it through the builder so the later
 // assignment is visible. avail is injected so tests can drive the
@@ -343,8 +343,8 @@ func (b *daemonBuilder) buildEmbedder() error {
 	b.refs = sqlite.NewEmbeddingRefsRepo(b.pools.ReadDB, b.pools.Write)
 	// The rate limit (Embedder.RatePerSec, default 10/s) exists to smooth load
 	// on the Ollama network branch. Local embedders (model2vec/static) do
-	// thousands/s, so applying it there throttled backfill to ~10/s
-	// (solov2-5r1u). Disable the limiter (rate 0) unless Ollama was elected.
+	// thousands/s, so applying it there throttled backfill to ~10/s.
+	// . Disable the limiter (rate 0) unless Ollama was elected.
 	rate := 0.0
 	if b.embedderIsOllama {
 		rate = b.fileCfg.Embedder.RatePerSec

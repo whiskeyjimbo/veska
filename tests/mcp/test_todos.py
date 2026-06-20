@@ -23,7 +23,7 @@ def test_find_todos_include_closed(mcp_client, repo_id, branch):
 
 
 def test_find_todos_branch_defaults_to_active(mcp_client, repo_id):
-    """branch was required pre-solov2-5vu1; now optional. Omitting branch
+    """branch was previously required; now optional. Omitting branch
     should succeed (resolves to the repo's active_branch)."""
     ok, text, _, result = mcp_client.call("eng_find_todos", {"repo_id": repo_id})
     assert ok, f"eng_find_todos without branch should default to active_branch, got: {text}"

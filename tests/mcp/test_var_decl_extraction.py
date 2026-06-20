@@ -1,6 +1,6 @@
 """Tests for top-level Go var/const extraction .
 
-Pre-b7wt the tree-sitter Go extractor emitted only function/method/type
+Pre- the tree-sitter Go extractor emitted only function/method/type
 nodes; package-scope var declarations were invisible. That made cobra
 CLIs (and any other framework where the API surface lives in initialised
 vars) look empty to eng_find_symbol. These tests pin the new behaviour
@@ -58,15 +58,15 @@ def _wait_for_promotion(mcp_client, repo_id: str, timeout_s: float = 15.0) -> bo
 
 
 def test_top_level_var_declarations_become_variable_nodes(mcp_client):
-    """solov2-b7wt: plain top-level var-block names (verbose, logFile) and
+    """plain top-level var-block names (verbose, logFile) and
     the const buildMode surface as kind='variable' nodes via eng_find_symbol.
 
     rootCmd is the exception: `var rootCmd = &cobra.Command{...}` is no
-    longer a plain variable - the cobra extractor (solov2, 'promote cobra
+    longer a plain variable - the cobra extractor ('promote cobra
     command literals to KindCommand') reclassifies it as a kind='command'
     node keyed by its Use string ("tool"), NOT by the Go var name. So we
     assert the command surfaces under "tool" rather than expecting a
-    'rootCmd' variable (solov2-khra: re-pinned after the extractor change)."""
+    'rootCmd' variable (re-pinned after the extractor change)."""
     with tempfile.TemporaryDirectory(prefix="veska-mcp-cobra-") as tmp:
         _init_cobra_repo(tmp)
 

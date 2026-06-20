@@ -43,7 +43,7 @@ def test_get_file_nodes_returns_file_content(mcp_client, repo_id, branch, target
     })
     assert ok, f"eng_get_file_nodes failed: {text}"
     nodes = result.get("nodes", [])
-    assert nodes, "expected at least one node (solov2-8ex regression check)"
+    assert nodes, "expected at least one node"
     # Every node returned must belong to the requested file.
     for n in nodes:
         assert n.get("file_path") == target_file, f"node {n} has wrong file_path"
@@ -54,7 +54,7 @@ def test_get_file_nodes_matches_sqlite(mcp_client, repo_id, branch, target_file)
     # eng_get_file_nodes filters out chunk:* pseudo-nodes (internal
     # file-fragment embedding units, nodesToDTO in dto.go), so the
     # ground-truth count must exclude them too or it over-counts every
-    # chunked file (solov2-khra).
+    # chunked file.
     db_count = query(
         "SELECT COUNT(*) AS c FROM nodes "
         "WHERE repo_id = ? AND branch = ? AND file_path = ? AND kind != 'chunk'",
@@ -70,7 +70,7 @@ def test_get_file_nodes_matches_sqlite(mcp_client, repo_id, branch, target_file)
 
 
 def test_find_symbol_branch_defaults_to_active(mcp_client, repo_id, target_symbol):
-    """solov2-5vu1: branch is optional and resolves to the registered
+    """branch is optional and resolves to the registered
     active_branch. Omitting branch should return the same hits as
     supplying it explicitly."""
     ok, text, _, result = mcp_client.call("eng_find_symbol", {
@@ -83,7 +83,7 @@ def test_find_symbol_branch_defaults_to_active(mcp_client, repo_id, target_symbo
 
 
 def test_find_symbol_accepts_repo_id_prefix(mcp_client, repo_id, branch, target_symbol):
-    """solov2-rkbc: any unambiguous repo_id prefix (>= 4 chars) resolves
+    """any unambiguous repo_id prefix (>= 4 chars) resolves
     to the full id. Use an 8-char prefix - neither the full sha nor the
     canonical 12-char short_id - to prove the prefix path runs."""
     prefix = repo_id[:8]
@@ -98,7 +98,7 @@ def test_find_symbol_accepts_repo_id_prefix(mcp_client, repo_id, branch, target_
 
 
 def test_get_node_without_repo_id_or_branch(mcp_client, repo_id, branch, target_symbol):
-    """solov2-v4ob: node_id is a content-hashed sha256 and globally unique,
+    """node_id is a content-hashed sha256 and globally unique,
     so eng_get_node must accept it without repo_id+branch."""
     _, _, _, find_result = mcp_client.call("eng_find_symbol", {
         "repo_id": repo_id, "branch": branch, "symbol": target_symbol,

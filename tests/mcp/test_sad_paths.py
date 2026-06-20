@@ -52,7 +52,7 @@ MISSING_REQUIRED_CASES = [
     ("eng_get_context_pack", {}, "required"),
     # find_owner validates repo_id before file_path and does NOT sole-repo
     # auto-resolve (unlike find_symbol), so an empty call is rejected on
-    # repo_id first (solov2-khra: re-pinned from "file_path").
+    # repo_id first (re-pinned from "file_path").
     ("eng_find_owner", {}, "repo_id"),
     # Findings family - finding_id is the always-required selector.
     ("eng_get_finding", {}, "finding_id"),
@@ -115,11 +115,9 @@ def test_unknown_ids_loud(mcp_client, method, params, want_substr):
 
 def test_search_similar_unknown_node_is_loud(mcp_client, repo_id, branch):
     """eng_search_similar with a real repo but bogus node_id surfaces the
-    shared node-id resolver error (-32002 'node_id … not in repo …') BEFORE
-    it ever reaches the embedding lookup (solov2-izh6). The resolver
-    rejecting the unknown id is the loud failure we want - the node simply
-    doesn't exist in the repo (solov2-khra: re-pinned from the old
-    'embedding'/'not found' wording)."""
+    shared node-id resolver error (-32002 'node_id ... not in repo ...') BEFORE
+    it ever reaches the embedding lookup. The resolver rejecting the unknown
+    id is the loud failure we want - the node simply doesn't exist in the repo."""
     ok, text, _, _ = mcp_client.call("eng_search_similar", {
         "repo_id": repo_id,
         "branch": branch,
@@ -135,7 +133,7 @@ def test_search_similar_unknown_node_is_loud(mcp_client, repo_id, branch):
 # Tools that soft-fail on unknown ID (success + empty body). Pin the contract.
 # eng_get_call_chain used to live here but now LOUDLY rejects an unknown
 # node_id via the shared resolver (-32002) - see
-# test_call_chain.py::test_call_chain_unknown_node_errors (solov2-khra).
+# test_call_chain.py::test_call_chain_unknown_node_errors.
 SOFT_FAIL_UNKNOWN_CASES = [
     ("eng_find_symbol", "symbol"),       # unknown symbol → {nodes:nil}
 ]

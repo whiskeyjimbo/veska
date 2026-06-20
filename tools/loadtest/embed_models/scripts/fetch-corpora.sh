@@ -2,7 +2,7 @@
 # fetch-corpora.sh - shallow-clone the external Go repos listed in
 # fixtures/repos.manifest into out/repos/<name>/, sha-pinned via the
 # manifest's tag-or-sha column. Idempotent: skips repos already at the
-# correct ref. (solov2-0k5h.2)
+# correct ref.
 #
 # Usage:
 #   tools/loadtest/embed_models/scripts/fetch-corpora.sh

@@ -92,7 +92,7 @@ func RunPostCheckout() error {
 	// repo.RepoIDForPath canonicalises (absolute + symlink-resolved) before
 	// hashing, exactly as registration does, so the id matches the row the
 	// registry stored even when the checkout is reached through a symlinked
-	// path (solov2: the previous local sha256 hashed the raw rev-parse output
+	// path (the previous local sha256 hashed the raw rev-parse output
 	// and could silently miss every row).
 	repoID := repo.RepoIDForPath(gitRoot)
 

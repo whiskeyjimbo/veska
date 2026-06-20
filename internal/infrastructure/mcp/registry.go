@@ -330,7 +330,7 @@ func (r *Registry) handleToolsCall(ctx context.Context, actor domain.Actor, raw 
 	// tools/call must return the MCP CallToolResult envelope, not the bare
 	// handler payload. Spec-compliant clients (Claude Code) render the
 	// content[] blocks; a bare object has no content[] and shows as empty
-	// output (solov2-z3mu). The flat-dispatch path (Dispatch) keeps returning
+	// output. The flat-dispatch path (Dispatch) keeps returning
 	// the bare payload - the CLI/mcpclient consumes that shape directly.
 	return newCallToolResult(result)
 }

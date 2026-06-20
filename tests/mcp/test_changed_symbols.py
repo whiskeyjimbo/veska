@@ -24,7 +24,7 @@ def test_changed_symbols_defaults_to_last_commit(mcp_client, repo_id, branch):
     })
     assert ok, f"eng_find_changed_symbols without refs should default to HEAD~1..HEAD, got error: {text}"
     assert isinstance(result, dict)
-    # solov2-jbgt: empty buckets must serialize as [] (never null).
+    # empty buckets must serialize as [] (never null).
     for k in ("added", "removed", "modified"):
         assert k in result, f"missing key {k!r} in response: {result}"
         assert isinstance(result[k], list), f"{k!r} = {result[k]!r}, want list "
@@ -42,7 +42,7 @@ def test_changed_symbols_one_ref_alone_is_error(mcp_client, repo_id, branch):
 
 
 def test_changed_symbols_file_path_is_absolute(mcp_client, repo_id, branch):
-    """solov2-w8nr: file_path in each SymbolChange must be absolute (it
+    """file_path in each SymbolChange must be absolute (it
     used to be repo-relative, inconsistent with every other node-emitting
     tool). HEAD~1..HEAD usually has at least one changed symbol; when
     the repo is one-commit-deep the test skips."""

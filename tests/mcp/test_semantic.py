@@ -26,15 +26,15 @@ def test_search_semantic_returns_results(mcp_client, repo_id, branch, target_sym
     syms = [r.get("name") for r in results]
     if not any(target_symbol in (s or "") for s in syms):
         pytest.xfail(
-            f"target {target_symbol!r} not in top 5 {syms} - likely solov2-249 "
-            "(sqlite-vec not rehydrated from node_embeddings on restart)"
+            f"target {target_symbol!r} not in top 5 {syms} - likely due to "
+            "sqlite-vec not being rehydrated from node_embeddings on restart"
         )
 
 
 def test_search_similar_unknown_node_errors(mcp_client, repo_id, branch):
     """eng_search_similar rejects an unknown node_id via the shared node-id
     resolver (-32002 'node_id … not in repo …') before reaching the
-    embedding lookup (solov2-izh6; solov2-khra: re-pinned from the old
+    embedding lookup (re-pinned from the old
     'no embedding' wording)."""
     ok, text, _, _ = mcp_client.call("eng_search_similar", {
         "repo_id": repo_id, "branch": branch,

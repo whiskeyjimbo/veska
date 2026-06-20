@@ -72,7 +72,7 @@ def test_alternative_get_file_nodes_absolute_vs_db_path(mcp_client, repo_id, bra
     # Exact-match means the bogus path must hit ZERO of the real nodes.
     # Any intersection - even a proper subset - is leakage; the old
     # `not (a & b) or a != b` form passed on partial overlap and so never
-    # caught the bug it documents (solov2-eabj).
+    # caught the bug it documents.
     assert abs_ids.isdisjoint(bogus_ids), (
         "get_file_nodes matched a same-basename path under a bogus dir - "
         "it is matching on suffix/basename, not exact path, and would "
