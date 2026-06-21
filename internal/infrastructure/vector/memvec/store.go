@@ -262,10 +262,32 @@ func (s *Store) TotalVectorCount() int {
 // differing lengths, comparison is bounded by the length of the shorter vector.
 func l2sq(a, b []float32) float32 {
 	n := min(len(b), len(a))
-	var sum float64
-	for i := range n {
-		d := float64(a[i]) - float64(b[i])
+	// Reslice to n so the compiler can eliminate per-iteration bounds checks on
+	// the unrolled indices.
+	a = a[:n]
+	b = b[:n]
+
+	// Four independent accumulators break the loop-carried dependency on a single
+	// sum, letting the CPU run the multiply-adds in parallel. Accumulating in
+	// float32 (not float64) also drops two per-element conversions; precision is
+	// sufficient for ranking L2-normalized embeddings, and the pairwise final add
+	// keeps the rounding error lower than a single running float32 sum.
+	var s0, s1, s2, s3 float32
+	i := 0
+	for ; i+4 <= n; i += 4 {
+		d0 := a[i] - b[i]
+		d1 := a[i+1] - b[i+1]
+		d2 := a[i+2] - b[i+2]
+		d3 := a[i+3] - b[i+3]
+		s0 += d0 * d0
+		s1 += d1 * d1
+		s2 += d2 * d2
+		s3 += d3 * d3
+	}
+	sum := (s0 + s2) + (s1 + s3)
+	for ; i < n; i++ {
+		d := a[i] - b[i]
 		sum += d * d
 	}
-	return float32(sum)
+	return sum
 }
