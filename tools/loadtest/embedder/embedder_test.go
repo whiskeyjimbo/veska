@@ -7,10 +7,10 @@
 // for a measurement window and assert sustained throughput is at or above the
 // gate-1 floor (5 emb/s, see M3.md exit gates).
 // What this measures: the WORKER's sustained output rate - i.e. the rate that
-// production observes, which is the min of (Ollama capacity, Worker rate
-// limiter). The Worker defaults to 10 emb/s; the gate floor is 5 emb/s; if
-// Ollama is healthy the run reports a rate close to the limiter cap. A rate
-// significantly below the limiter cap points at Ollama, not the worker.
+// production observes. Since solov2-fi42 the worker greedy-drains under a
+// concurrency Governor instead of a fixed rate limiter, so throughput is
+// bounded by Ollama capacity, not an artificial cap. The gate floor is 5
+// emb/s; a rate at or below the floor points at Ollama, not the worker.
 // Build-tag-gated; the make target is `make eval-embed-throughput`. The test
 // skips with a clear message if Ollama is not reachable.
 package embedder
@@ -59,6 +59,7 @@ type result struct {
 func TestEmbedderThroughput(t *testing.T) {
 	durationS := envInt("EMBED_BENCH_DURATION_S", defaultDurationS)
 	seedN := envInt("EMBED_BENCH_SEED_N", defaultSeedN)
+	batchSize := envInt("EMBED_BENCH_BATCH_SIZE", 0) // 0 = worker default (32)
 	gateMin := envFloat("EMBED_BENCH_GATE_MIN_RATE", defaultGateMin)
 	ollamaURL := envStr("VESKA_OLLAMA_URL", defaultOllamaURL)
 	model := envStr("VESKA_EMBED_MODEL", defaultModel)
@@ -107,10 +108,17 @@ func TestEmbedderThroughput(t *testing.T) {
 	}
 	vectors := memvec.New()
 
-	// Use defaults: 10 emb/s limiter, 32 batch, 250ms interval. The point
-	// of gate-1 is to measure the *worker's* sustained output, not to
-	// uncap Ollama.
-	worker, err := embedder.NewWorker(refs, provider, vectors)
+	// Use defaults: fixed-1 governor (greedy drain), 32 batch, 250ms idle
+	// interval. The point of gate-1 is to measure the *worker's* sustained
+	// output against a single local Ollama instance. EMBED_BENCH_BATCH_SIZE
+	// overrides the batch: a small batch amplifies the per-batch interval cost,
+	// which is how the greedy-drain win over the old one-batch-per-tick loop
+	// becomes visible on an Ollama-bound host.
+	var opts []embedder.Option
+	if batchSize > 0 {
+		opts = append(opts, embedder.WithBatchSize(batchSize))
+	}
+	worker, err := embedder.NewWorker(refs, provider, vectors, opts...)
 	if err != nil {
 		t.Fatalf("embedder.NewWorker: %v", err)
 	}

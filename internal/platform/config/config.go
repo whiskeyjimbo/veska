@@ -150,16 +150,15 @@ type WatcherConfig struct {
 	MaxPathsTotal        int    `toml:"max_paths_total"`
 }
 
-// EmbedderConfig selects the embedding provider and its rate limits.
 // EmbedderConfig holds the Ollama-branch embedder knobs. Election itself is
 // driven by VESKA_EMBEDDER (auto: model2vec -> static, Ollama only on explicit
 // override), not by this block. Endpoint/Model carry the VESKA_OLLAMA_URL /
-// VESKA_EMBED_MODEL env values consumed when Ollama is elected; RatePerSec
-// throttles the Ollama network branch.
+// VESKA_EMBED_MODEL env values consumed when Ollama is elected. A removed
+// rate_per_sec key is silently ignored: throughput is now bounded by the
+// embedder's greedy drain + Governor, not a fixed rate (solov2-fi42).
 type EmbedderConfig struct {
-	Endpoint   string  `toml:"endpoint"`
-	Model      string  `toml:"model"`
-	RatePerSec float64 `toml:"rate_per_sec"`
+	Endpoint string `toml:"endpoint"`
+	Model    string `toml:"model"`
 }
 
 // PostPromotionQueueConfig tunes the background work queue poller.
@@ -226,8 +225,8 @@ type VulnSourceConfig struct {
 }
 
 // DefaultConfig returns the compile-time defaults. These mirror the Go
-// constants currently spread across the daemon (embedder.DefaultRatePerSec,
-// queue's 250ms poll interval, the chars/4 token budgets, etc.).
+// constants currently spread across the daemon (queue's 250ms poll interval,
+// the chars/4 token budgets, etc.).
 func DefaultConfig() Config {
 	return Config{
 		Daemon: DaemonConfig{
@@ -271,9 +270,8 @@ func DefaultConfig() Config {
 			MaxPathsTotal:        200000,
 		},
 		Embedder: EmbedderConfig{
-			Endpoint:   "http://localhost:11434",
-			Model:      "nomic-embed-text",
-			RatePerSec: 10,
+			Endpoint: "http://localhost:11434",
+			Model:    "nomic-embed-text",
 		},
 		PostPromotionQueue: PostPromotionQueueConfig{
 			PollInterval:  "250ms",
