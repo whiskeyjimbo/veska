@@ -71,7 +71,7 @@ func TestDeadCodeRepo_ReturnsOnlyNodesWithZeroInbound(t *testing.T) {
 	f.insertNode(t, "n-caller", "pkg/a.go", "function", "caller")
 	f.insertNode(t, "n-out-of-scope-dead", "pkg/c.go", "function", "outOfScopeDead")
 
-	f.insertEdge(t, "e1", "n-caller", "n-called", "calls")
+	f.insertEdge(t, "e1", "n-caller", "n-called", "CALLS")
 
 	repo := sqlite.NewDeadCodeRepo(f.db)
 	got, err := repo.DeadNodesInFiles(context.Background(), f.repoID, f.branch, []string{"pkg/a.go", "pkg/b.go"})
@@ -166,7 +166,7 @@ func TestDeadCodeRepo_BranchIsolation(t *testing.T) {
 	_, err = f.db.Exec(`INSERT INTO edges (
         edge_id, branch, repo_id, src_node_id, dst_node_id, kind, confidence, last_promoted_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"e-f", "feature", f.repoID, "n-caller-f", "n-target", "calls", "high", time.Now().UnixMilli(),
+		"e-f", "feature", f.repoID, "n-caller-f", "n-target", "CALLS", "high", time.Now().UnixMilli(),
 	)
 	if err != nil {
 		t.Fatalf("insert feature-branch edge: %v", err)

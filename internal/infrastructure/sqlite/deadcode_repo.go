@@ -44,7 +44,7 @@ SELECT n.node_id, n.file_path, n.kind, n.symbol_path,
        COALESCE(n.content_hash, '')
 FROM nodes n
 LEFT JOIN edges e
-  ON e.dst_node_id = n.node_id AND e.branch = n.branch AND UPPER(e.kind) = 'CALLS'
+  ON e.dst_node_id = n.node_id AND e.branch = n.branch AND e.kind = 'CALLS'
 WHERE n.repo_id = ?
   AND n.branch = ?
   AND n.file_path IN (%s)

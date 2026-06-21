@@ -21,10 +21,10 @@ func TestCoverageRepo_AttributesCallersByFile(t *testing.T) {
 	f.insertNode(t, "c-prod", "pkg/handler.go", "function", "handle")
 	f.insertNode(t, "c-test", "pkg/a_test.go", "function", "TestDoWork")
 
-	f.insertEdge(t, "e1", "c-prod", "n-prod", "calls")
-	f.insertEdge(t, "e2", "c-test", "n-prod", "calls")
-	f.insertEdge(t, "e3", "c-prod", "n-untested", "calls")
-	f.insertEdge(t, "e4", "c-test", "n-untested", "contains")
+	f.insertEdge(t, "e1", "c-prod", "n-prod", "CALLS")
+	f.insertEdge(t, "e2", "c-test", "n-prod", "CALLS")
+	f.insertEdge(t, "e3", "c-prod", "n-untested", "CALLS")
+	f.insertEdge(t, "e4", "c-test", "n-untested", "CONTAINS")
 
 	repo := sqlite.NewCoverageRepo(f.db)
 	got, err := repo.CandidateCallersInFiles(context.Background(), f.repoID, f.branch, []string{"pkg/a.go"})
@@ -99,8 +99,8 @@ func TestCoverageRepo_InboundCallsEdges(t *testing.T) {
 	f.insertNode(t, "caller", "pkg/a_test.go", "function", "TestDoWork")
 	f.insertNode(t, "pkgnode", "pkg/a.go", "package", "pkg")
 
-	f.insertEdge(t, "e1", "caller", "prod", "calls")     // a real caller
-	f.insertEdge(t, "e2", "pkgnode", "prod", "contains") // must NOT count
+	f.insertEdge(t, "e1", "caller", "prod", "CALLS")     // a real caller
+	f.insertEdge(t, "e2", "pkgnode", "prod", "CONTAINS") // must NOT count
 
 	repo := sqlite.NewCoverageRepo(f.db)
 	got, err := repo.InboundCallsEdges(context.Background(), f.repoID, f.branch, []string{"prod", "orphan"})

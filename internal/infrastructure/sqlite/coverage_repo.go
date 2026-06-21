@@ -41,7 +41,7 @@ SELECT n.node_id, n.file_path, n.kind, n.symbol_path,
        COALESCE(n.content_hash, ''), src.file_path AS caller_file
 FROM nodes n
 LEFT JOIN edges e
-  ON e.dst_node_id = n.node_id AND e.branch = n.branch AND UPPER(e.kind) = 'CALLS'
+  ON e.dst_node_id = n.node_id AND e.branch = n.branch AND e.kind = 'CALLS'
 LEFT JOIN nodes src
   ON src.node_id = e.src_node_id AND src.branch = n.branch
 WHERE n.repo_id = ?
@@ -119,7 +119,7 @@ JOIN nodes src
   ON src.node_id = e.src_node_id AND src.branch = e.branch
 WHERE e.repo_id = ?
   AND e.branch = ?
-  AND UPPER(e.kind) = 'CALLS'
+  AND e.kind = 'CALLS'
   AND e.dst_node_id IN (%s)`, strings.Join(placeholders, ","))
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
