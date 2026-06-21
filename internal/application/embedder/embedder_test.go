@@ -995,6 +995,26 @@ func (a *alwaysErrEmbedder) Embed(_ context.Context, text string) ([]float32, er
 
 func (a *alwaysErrEmbedder) ModelID() string { return a.modelID }
 
+// failOnceEmbedder fails its first Embed call, then blocks every later call
+// until ctx is canceled. This pins the worker at exactly one recorded attempt:
+// without it, the greedy retry loop races ahead through the whole budget before
+// a test can observe the post-first-failure state.
+type failOnceEmbedder struct {
+	modelID string
+	err     error
+	failed  atomic.Bool
+}
+
+func (e *failOnceEmbedder) Embed(ctx context.Context, _ string) ([]float32, error) {
+	if e.failed.CompareAndSwap(false, true) {
+		return nil, e.err
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (e *failOnceEmbedder) ModelID() string { return e.modelID }
+
 // TestWorker_RetryBumpsAttempts verifies that a single Embed error bumps
 // attempts but leaves state='pending' so the row is drained again.
 func TestWorker_RetryBumpsAttempts(t *testing.T) {
@@ -1003,12 +1023,7 @@ func TestWorker_RetryBumpsAttempts(t *testing.T) {
 
 	seedNode(t, db, "n1", "r1", "main", "pkg.F", "function")
 
-	emb := &alwaysErrEmbedder{
-		failOn:  "function pkg.F f.go go",
-		vector:  []float32{1, 2, 3},
-		modelID: "m",
-		err:     errors.New("boom"),
-	}
+	emb := &failOnceEmbedder{modelID: "m", err: errors.New("boom")}
 	vs := &fakeVectorStore{}
 
 	w := mustNewWorker(t, repo, emb, vs,
