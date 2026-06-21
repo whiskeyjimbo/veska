@@ -1,0 +1,109 @@
+name: release
+
+# Tag-triggered release. cgo is mandatory (tree-sitter + sqlite_fts5) and the
+# fat binary bakes in the model2vec weights, so every target is compiled
+# NATIVELY on a matching runner - no cross-compile toolchain, no zig. The
+# release job then assembles the per-runner tarballs into one GitHub release
+# with a git-cliff changelog. (goreleaser's multi-machine merge is Pro-only,
+# so we package by hand here.)
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,  goarch: amd64, runner: ubuntu-latest }
+          - { goos: linux,  goarch: arm64, runner: ubuntu-24.04-arm }
+          - { goos: darwin, goarch: arm64, runner: macos-latest }
+          # darwin/amd64 cross-built on the arm64 mac runner; the macOS SDK is
+          # universal, so `clang -arch x86_64` produces a working cgo binary.
+          - { goos: darwin, goarch: amd64, runner: macos-latest, cc: clang -arch x86_64 }
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      # Download + verify the model2vec weights into the //go:embed dir. Runs
+      # native (no GOOS/GOARCH override) since it `go run`s the installer.
+      - name: Fetch embed assets
+        run: make fetch-embed-assets
+
+      - name: Build and package
+        env:
+          CGO_ENABLED: '1'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          if [ -n "${{ matrix.cc }}" ]; then export CC="${{ matrix.cc }}"; fi
+          version="${GITHUB_REF_NAME#v}"
+          name="veska_${version}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          mkdir -p "dist/${name}"
+          go build -tags "embed_model sqlite_fts5" \
+            -ldflags "-s -w -X main.version=${version}" \
+            -o "dist/${name}/veska" ./cmd/veska
+          cp scripts/install.sh "dist/${name}/install.sh"
+          chmod +x "dist/${name}/install.sh"
+          cp LICENSE THIRD_PARTY_NOTICES "dist/${name}/"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: veska-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # git-cliff needs full history + tags
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # vX.Y.Z-rc1 / -beta etc. -> mark as a GitHub pre-release.
+          flags=()
+          case "$GITHUB_REF_NAME" in
+            *-*) flags+=(--prerelease) ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file RELEASE_NOTES.md \
+            "${flags[@]}" \
+            dist/*.tar.gz dist/checksums.txt
