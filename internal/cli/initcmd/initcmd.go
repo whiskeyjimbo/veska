@@ -67,10 +67,16 @@ type Flags struct {
 //  4. Prints a short summary to out on success.
 func Run(ctx context.Context, deps Deps, flags Flags, out io.Writer) error {
 	// ── 1. Create directory layout ───────────────────────────────────────────
+	// VESKA_HOME holds parsed private source, the index, the audit log, and
+	// backups - keep it owner-only (0700) so other local users can't read it.
 	for _, sub := range []string{"logs", "cache", "state"} {
-		if err := os.MkdirAll(filepath.Join(deps.VeskaHome, sub), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(deps.VeskaHome, sub), 0o700); err != nil {
 			return fmt.Errorf("create %s: %w", sub, err)
 		}
+	}
+	// MkdirAll won't downgrade a pre-existing 0755 root, so tighten it explicitly.
+	if err := os.Chmod(deps.VeskaHome, 0o700); err != nil {
+		return fmt.Errorf("secure %s: %w", deps.VeskaHome, err)
 	}
 
 	// resolve vuln_source choice BEFORE writing the config so
@@ -315,7 +321,7 @@ func writeDefaultConfigIfAbsent(veskaHome string, vulnEnabled bool) error {
 	} else {
 		body += vulnSourceBlockDisabled
 	}
-	return os.WriteFile(path, []byte(body), 0o644)
+	return os.WriteFile(path, []byte(body), 0o600)
 }
 
 // envOrDefault returns the env var when non-empty, else def.

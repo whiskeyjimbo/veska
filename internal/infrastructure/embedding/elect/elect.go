@@ -184,7 +184,7 @@ func readMarker(veskaHome string) (string, error) {
 
 // writeMarker persists name as the elected embedder marker.
 func writeMarker(veskaHome, name string) error {
-	if err := os.MkdirAll(veskaHome, 0o755); err != nil {
+	if err := os.MkdirAll(veskaHome, 0o700); err != nil {
 		return fmt.Errorf("elect: mkdir veska home: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(veskaHome, markerFile), []byte(name+"\n"), 0o644); err != nil {

@@ -149,7 +149,7 @@ func rotatedName(base string, n int) string {
 // openAuditFile opens (or creates) the file at path in append mode and returns
 // the file and its current size.
 func openAuditFile(path string) (*os.File, int64, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, 0, err
 	}

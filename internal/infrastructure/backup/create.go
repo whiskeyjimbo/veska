@@ -103,8 +103,9 @@ func Create(opts CreateOptions) (CreateResult, error) {
 		return CreateResult{}, fmt.Errorf("backup: write manifest: %w", err)
 	}
 
-	// 7. Create tarball.
-	if err := os.MkdirAll(opts.BackupDir, 0o755); err != nil {
+	// 7. Create tarball. The archive bundles veska.db + audit log, so keep the
+	// backup dir owner-only (0700) like the rest of VESKA_HOME.
+	if err := os.MkdirAll(opts.BackupDir, 0o700); err != nil {
 		return CreateResult{}, fmt.Errorf("backup: mkdir backup dir: %w", err)
 	}
 	timestamp := time.Now().UTC().Format("20060102T150405Z")
@@ -189,8 +190,10 @@ func copyDirRecursive(src, dst string) error {
 }
 
 // createTarGz walks srcDir and writes all files into a.tar.gz at tarPath.
+// The archive contains veska.db + the audit log, so it is created owner-only
+// (0600) rather than inheriting the umask default.
 func createTarGz(tarPath, srcDir string) error {
-	f, err := os.Create(tarPath)
+	f, err := os.OpenFile(tarPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
