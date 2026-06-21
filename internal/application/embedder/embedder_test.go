@@ -893,6 +893,47 @@ func TestWorker_GovernorEnablesConcurrentEmbedding(t *testing.T) {
 	w.Wait()
 }
 
+// TestWorker_NoDoubleEmbedAtLimitGreaterThanOne is the regression for the
+// drainPass row-overlap bug: FetchPending does not claim rows, so collecting
+// `limit` batches by calling it once per batch handed every batch the same top
+// rows - at limit>1 each row was embedded once per batch. With distinct rows,
+// the total Embed count must equal the row count exactly.
+func TestWorker_NoDoubleEmbedAtLimitGreaterThanOne(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	const n = 6
+	for i := range n {
+		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
+	}
+
+	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
+	vs := &fakeVectorStore{}
+
+	// limit 3, batch 2 => the buggy loop fetched the same 2 rows 3x per pass.
+	w := mustNewWorker(t, repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithBatchSize(2),
+		embedder.WithGovernor(embedder.NewFixedGovernor(3)),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	if !waitForCondition(t, 3*time.Second, func() bool {
+		left, _ := repo.CountPending(ctx)
+		return left == 0
+	}) {
+		t.Fatal("queue never drained")
+	}
+	cancel()
+	w.Wait()
+
+	if got := emb.calls.Load(); got != int64(n) {
+		t.Fatalf("Embed calls = %d, want %d (one per distinct row; >n means rows were double-fetched across batches)", got, n)
+	}
+}
+
 // concurrencyProbe records the peak number of simultaneous Embed calls. Each
 // call releases the others once `target` are in flight, so the worker only
 // makes progress when the governor truly runs them concurrently; a safety
@@ -954,6 +995,26 @@ func (a *alwaysErrEmbedder) Embed(_ context.Context, text string) ([]float32, er
 
 func (a *alwaysErrEmbedder) ModelID() string { return a.modelID }
 
+// failOnceEmbedder fails its first Embed call, then blocks every later call
+// until ctx is canceled. This pins the worker at exactly one recorded attempt:
+// without it, the greedy retry loop races ahead through the whole budget before
+// a test can observe the post-first-failure state.
+type failOnceEmbedder struct {
+	modelID string
+	err     error
+	failed  atomic.Bool
+}
+
+func (e *failOnceEmbedder) Embed(ctx context.Context, _ string) ([]float32, error) {
+	if e.failed.CompareAndSwap(false, true) {
+		return nil, e.err
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (e *failOnceEmbedder) ModelID() string { return e.modelID }
+
 // TestWorker_RetryBumpsAttempts verifies that a single Embed error bumps
 // attempts but leaves state='pending' so the row is drained again.
 func TestWorker_RetryBumpsAttempts(t *testing.T) {
@@ -962,12 +1023,7 @@ func TestWorker_RetryBumpsAttempts(t *testing.T) {
 
 	seedNode(t, db, "n1", "r1", "main", "pkg.F", "function")
 
-	emb := &alwaysErrEmbedder{
-		failOn:  "function pkg.F f.go go",
-		vector:  []float32{1, 2, 3},
-		modelID: "m",
-		err:     errors.New("boom"),
-	}
+	emb := &failOnceEmbedder{modelID: "m", err: errors.New("boom")}
 	vs := &fakeVectorStore{}
 
 	w := mustNewWorker(t, repo, emb, vs,
