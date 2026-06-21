@@ -263,7 +263,8 @@ func applyPragmas(db *sql.DB) error {
 }
 
 // openAndMigrate is the shared implementation for Open and OpenWithOptions.
-func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
+// verifyIntegrity gates the schema-tamper check (see Options.VerifyIntegrity).
+func openAndMigrate(path, backupDir, appliedBy string, verifyIntegrity bool) (*sql.DB, error) {
 	db, err := sql.Open(sqldriver.Name, normalizeDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.Open %s: %w", path, err)
@@ -291,10 +292,12 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 
 	switch {
 	case current == target:
-		if err := verifyAppliedSHAs(db); err != nil {
-			db.Close()
-			fmt.Fprintf(os.Stderr, "veska: migration integrity check failed: %v\n", err)
-			os.Exit(78)
+		if verifyIntegrity {
+			if err := verifyAppliedSHAs(db); err != nil {
+				db.Close()
+				fmt.Fprintf(os.Stderr, "veska: migration integrity check failed: %v\n", err)
+				os.Exit(78)
+			}
 		}
 		return db, nil
 
@@ -309,7 +312,7 @@ func openAndMigrate(path, backupDir, appliedBy string) (*sql.DB, error) {
 		os.Exit(78)
 
 	default:
-		if current > 0 {
+		if verifyIntegrity && current > 0 {
 			if err := verifyAppliedSHAs(db); err != nil {
 				db.Close()
 				fmt.Fprintf(os.Stderr, "veska: migration integrity check failed before upgrade: %v\n", err)
@@ -333,11 +336,33 @@ type Options struct {
 
 	// AppliedBy is recorded in schema_migrations.applied_by.
 	AppliedBy string
+
+	// VerifyIntegrity enables the schema-tamper check that compares each
+	// applied migration's recorded SHA against the embedded SQL. It is the
+	// config-driven default (daemon wires [storage] verify_migration_integrity
+	// here); the zero value is off. It is currently off by default because the
+	// check is brittle - editing a comment in an already-applied migration
+	// changes its SHA and trips a false tamper alarm. The VESKA_MIGRATION_INTEGRITY
+	// env var, when set, overrides this so an operator can always force the check
+	// on or off regardless of config.
+	VerifyIntegrity bool
 }
 
-// OpenWithOptions opens the SQLite database and applies pending migrations. In
-// accordance with requirements, it calls os.Exit(78) on migration failures or
-// schema tamper detection.
+// verifyIntegrity resolves whether the schema-tamper check runs. A non-empty
+// VESKA_MIGRATION_INTEGRITY env var (1/true to enable, any other value to
+// disable) wins over the config-driven Options field so an operator always has
+// a disable/enable escape hatch; unset or empty defers to the field.
+func (o Options) verifyIntegrity() bool {
+	if v := os.Getenv("VESKA_MIGRATION_INTEGRITY"); v != "" {
+		return v == "1" || strings.EqualFold(v, "true")
+	}
+	return o.VerifyIntegrity
+}
+
+// OpenWithOptions opens the SQLite database and applies pending migrations. It
+// calls os.Exit(78) on migration failures, and - when the schema-tamper check
+// is enabled via Options.VerifyIntegrity or VESKA_MIGRATION_INTEGRITY - on
+// tamper detection.
 func OpenWithOptions(path string, opts Options) (*sql.DB, error) {
 	backupDir := opts.BackupDir
 	if backupDir == "" {
@@ -351,7 +376,7 @@ func OpenWithOptions(path string, opts Options) (*sql.DB, error) {
 			appliedBy = "unknown"
 		}
 	}
-	return openAndMigrate(path, backupDir, appliedBy)
+	return openAndMigrate(path, backupDir, appliedBy, opts.verifyIntegrity())
 }
 
 // Open opens the SQLite database and runs all migrations using default options.
