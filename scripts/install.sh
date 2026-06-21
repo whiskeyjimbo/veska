@@ -25,13 +25,16 @@ set -euo pipefail
 
 err() { printf 'install.sh: %s\n' "$*" >&2; }
 
-# Locate the bin/ dir relative to this script. Works whether the script
-# is invoked as `scripts/install.sh` (clone) or `./install.sh` (extracted
-# tarball, where install.sh sits next to bin/).
+# Locate the veska binary relative to this script. Three layouts are
+# supported: `scripts/install.sh` from a clone (bin/ subdir), the
+# make release-archive tarball (./bin/ next to install.sh), and the
+# goreleaser archive (veska flat, next to install.sh). Only `veska` need
+# exist - veska-daemon and veska-mcp are symlinks this script synthesizes
+# at the destination, so requiring them at the source was needless coupling.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 src_bin=""
-for candidate in "$script_dir/bin" "$script_dir/../bin"; do
-    if [[ -x "$candidate/veska" && -x "$candidate/veska-daemon" && -x "$candidate/veska-mcp" ]]; then
+for candidate in "$script_dir/bin" "$script_dir/../bin" "$script_dir"; do
+    if [[ -x "$candidate/veska" ]]; then
         src_bin="$(cd "$candidate" && pwd)"
         break
     fi

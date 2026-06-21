@@ -12,7 +12,7 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets notices install release-archive test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
+.PHONY: all build build-small build-fat fetch-embed-assets notices install release-archive changelog test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
 
 # `all` uses build-small to keep the test loop fast - the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -141,6 +141,16 @@ release-archive: build
 	@printf 'veska %s\n\nThis archive contains the veska binaries (CLI, daemon, MCP shim)\nwith the model2vec embedder weights compiled in.\n\nInstall:\n  ./install.sh                # ~/.local/bin (default)\n  VESKA_INSTALL_DIR=/usr/local/bin sudo ./install.sh\n\nThen:\n  veska init -y && veska service install && veska service start\n\nDocs: https://github.com/whiskeyjimbo/veska\n' "$(RELEASE_VERSION)" > $(RELEASE_DIR)/README.txt
 	cd dist && tar -czf $(RELEASE_NAME).tar.gz $(RELEASE_NAME)
 	@printf 'release archive: dist/%s.tar.gz\n' "$(RELEASE_NAME)"
+
+# changelog: regenerate CHANGELOG.md from conventional commits via git-cliff.
+# The release workflow builds per-tag release notes the same way
+# (`git-cliff --latest`); this target writes the full-history file. Requires
+# git-cliff on PATH (https://git-cliff.org - `cargo install git-cliff` or
+# `brew install git-cliff`).
+changelog:
+	@command -v git-cliff >/dev/null || { echo "git-cliff not found - see https://git-cliff.org" >&2; exit 1; }
+	git-cliff --config cliff.toml -o CHANGELOG.md
+	@printf 'wrote CHANGELOG.md\n'
 
 test:
 	$(SQLITE_CGO_ENV) go test -tags "$(SQLITE_TAGS)" ./...
