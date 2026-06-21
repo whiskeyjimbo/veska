@@ -12,7 +12,6 @@ package memvec
 
 import (
 	"context"
-	"sort"
 	"sync"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -93,24 +92,48 @@ func (s *Store) UpsertEmbeddings(_ context.Context, repoID, branch string, batch
 	return nil
 }
 
+// candidate is a node and its squared L2 distance to the query vector.
+type candidate struct {
+	nodeID string
+	dist   float32
+}
+
 // Search returns the k nearest neighbors of the query vector in the specified repository and branch.
 // It performs a brute-force L2-squared linear scan and returns results sorted by score in descending
 // order. If filter.ModelID is specified, only that partition is searched; otherwise, results from all
 // partitions for the repository and branch are merged.
+//
+// It keeps only the k closest candidates in a bounded max-heap (root = the
+// farthest of the kept k) rather than collecting every vector and sorting the
+// whole set: allocation is O(k) per query instead of O(N), and there is no
+// full-partition sort. l2sq is still evaluated once per stored vector - the scan
+// itself is inherently linear for this backend.
 func (s *Store) Search(_ context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	type candidate struct {
-		nodeID string
-		dist   float32
+	if k <= 0 {
+		return nil, nil
 	}
-	var cands []candidate
+
+	// Max-heap of the k closest candidates seen so far. A new candidate enters
+	// only when it is closer than the current farthest kept (the root).
+	h := make([]candidate, 0, k)
+	consider := func(nodeID string, d float32) {
+		if len(h) < k {
+			h = append(h, candidate{nodeID: nodeID, dist: d})
+			siftUp(h, len(h)-1)
+			return
+		}
+		if d < h[0].dist {
+			h[0] = candidate{nodeID: nodeID, dist: d}
+			siftDown(h, 0)
+		}
+	}
 
 	scan := func(p map[string]*row) {
 		for _, r := range p {
-			d := l2sq(r.vector, vec)
-			cands = append(cands, candidate{nodeID: r.nodeID, dist: d})
+			consider(r.nodeID, l2sq(r.vector, vec))
 		}
 	}
 
@@ -127,22 +150,54 @@ func (s *Store) Search(_ context.Context, repoID, branch string, vec []float32, 
 		}
 	}
 
-	// Sort candidates by ascending distance to find the closest matches first.
-	sort.Slice(cands, func(i, j int) bool { return cands[i].dist < cands[j].dist })
-
-	if k > len(cands) {
-		k = len(cands)
-	}
-	cands = cands[:k]
-
-	hits := make([]domain.SearchHit, len(cands))
-	for i, c := range cands {
+	// Drain the heap farthest-first, filling the result back-to-front so it ends
+	// up sorted by ascending distance (descending score).
+	hits := make([]domain.SearchHit, len(h))
+	for i := len(h) - 1; i >= 0; i-- {
+		top := h[0]
+		last := len(h) - 1
+		h[0] = h[last]
+		h = h[:last]
+		if len(h) > 0 {
+			siftDown(h, 0)
+		}
 		hits[i] = domain.SearchHit{
-			NodeID: c.nodeID,
-			Score:  1.0 / (1.0 + c.dist),
+			NodeID: top.nodeID,
+			Score:  1.0 / (1.0 + top.dist),
 		}
 	}
 	return hits, nil
+}
+
+// siftUp restores the max-heap property after appending at index i.
+func siftUp(h []candidate, i int) {
+	for i > 0 {
+		parent := (i - 1) / 2
+		if h[parent].dist >= h[i].dist {
+			break
+		}
+		h[parent], h[i] = h[i], h[parent]
+		i = parent
+	}
+}
+
+// siftDown restores the max-heap property after replacing the element at index i.
+func siftDown(h []candidate, i int) {
+	n := len(h)
+	for {
+		largest := i
+		if l := 2*i + 1; l < n && h[l].dist > h[largest].dist {
+			largest = l
+		}
+		if r := 2*i + 2; r < n && h[r].dist > h[largest].dist {
+			largest = r
+		}
+		if largest == i {
+			break
+		}
+		h[i], h[largest] = h[largest], h[i]
+		i = largest
+	}
 }
 
 // Reindex is a no-op because the linear-scan store does not maintain a persistent index structure.
