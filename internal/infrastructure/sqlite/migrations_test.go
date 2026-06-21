@@ -187,6 +187,43 @@ func TestMigration0023_FindingsRuleStateIndexIsUsed(t *testing.T) {
 	}
 }
 
+// TestEdgeKindQueryUsesIndexComponent guards the UPPER(kind) removal: an inbound
+// -CALLS check must seek on idx_edges_dst's full (dst, branch, kind) - wrapping
+// kind in UPPER() drops kind from the seek and residual-scans a node's whole
+// inbound edge set. edges.kind is stored upper-case by the EdgeKind enum, so the
+// direct comparison is correct and the index is usable.
+func TestEdgeKindQueryUsesIndexComponent(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	_ = openTest(t, dbPath)
+	raw := openRawDB(t, dbPath)
+
+	rows, err := raw.Query(
+		`EXPLAIN QUERY PLAN
+		 SELECT EXISTS(SELECT 1 FROM edges WHERE dst_node_id=? AND branch=? AND repo_id=? AND kind='CALLS' LIMIT 1)`,
+		"hub", "main", "r1")
+	if err != nil {
+		t.Fatalf("explain query plan: %v", err)
+	}
+	defer rows.Close()
+
+	var plan strings.Builder
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatalf("scan plan row: %v", err)
+		}
+		plan.WriteString(detail)
+		plan.WriteByte('\n')
+	}
+	// The seek must cover kind. With UPPER(kind) the detail stops at "branch=?".
+	if !strings.Contains(plan.String(), "idx_edges_dst") || !strings.Contains(plan.String(), "kind=") {
+		t.Errorf("inbound-CALLS query did not seek idx_edges_dst including kind; plan:\n%s", plan.String())
+	}
+}
+
 func TestMigration0001_RecordsSchemaVersion(t *testing.T) {
 	t.Parallel()
 
