@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -110,6 +111,44 @@ func TestMigration0001_CreatesIndexes(t *testing.T) {
 		if !indexExists(t, raw, idx) {
 			t.Errorf("index %q not found after migration 0001", idx)
 		}
+	}
+}
+
+func TestMigration0022_NodesFilePathIndexIsUsed(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	_ = openTest(t, dbPath)
+	raw := openRawDB(t, dbPath)
+
+	if !indexExists(t, raw, "idx_nodes_repo_branch_file") {
+		t.Fatal("idx_nodes_repo_branch_file not found after migrations")
+	}
+
+	// The planner must SEARCH via the new index for a file-scoped node query,
+	// not residual-scan the repo+branch. This is the whole point of the index;
+	// asserting existence alone wouldn't catch the planner ignoring it.
+	rows, err := raw.Query(
+		`EXPLAIN QUERY PLAN
+		 SELECT node_id FROM nodes WHERE repo_id = ? AND branch = ? AND file_path = ?`,
+		"r1", "main", "f.go")
+	if err != nil {
+		t.Fatalf("explain query plan: %v", err)
+	}
+	defer rows.Close()
+
+	var plan strings.Builder
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatalf("scan plan row: %v", err)
+		}
+		plan.WriteString(detail)
+		plan.WriteByte('\n')
+	}
+	if !strings.Contains(plan.String(), "idx_nodes_repo_branch_file") {
+		t.Errorf("file-path node query did not use idx_nodes_repo_branch_file; plan:\n%s", plan.String())
 	}
 }
 
