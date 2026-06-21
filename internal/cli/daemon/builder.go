@@ -198,7 +198,9 @@ func (b *daemonBuilder) openStorage() error {
 		return fmt.Errorf("daemon: open sqlite pools: %w", err)
 	}
 	b.pools = pools
-	if _, err := sqlite.OpenWithOptions(b.cfg.SQLitePath, sqlite.Options{}); err != nil {
+	if _, err := sqlite.OpenWithOptions(b.cfg.SQLitePath, sqlite.Options{
+		VerifyIntegrity: b.fileCfg.Storage.VerifyMigrationIntegrity,
+	}); err != nil {
 		_ = pools.Close()
 		return fmt.Errorf("daemon: migrate sqlite: %w", err)
 	}
