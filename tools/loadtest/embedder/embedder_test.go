@@ -59,6 +59,7 @@ type result struct {
 func TestEmbedderThroughput(t *testing.T) {
 	durationS := envInt("EMBED_BENCH_DURATION_S", defaultDurationS)
 	seedN := envInt("EMBED_BENCH_SEED_N", defaultSeedN)
+	batchSize := envInt("EMBED_BENCH_BATCH_SIZE", 0) // 0 = worker default (32)
 	gateMin := envFloat("EMBED_BENCH_GATE_MIN_RATE", defaultGateMin)
 	ollamaURL := envStr("VESKA_OLLAMA_URL", defaultOllamaURL)
 	model := envStr("VESKA_EMBED_MODEL", defaultModel)
@@ -109,8 +110,15 @@ func TestEmbedderThroughput(t *testing.T) {
 
 	// Use defaults: fixed-1 governor (greedy drain), 32 batch, 250ms idle
 	// interval. The point of gate-1 is to measure the *worker's* sustained
-	// output against a single local Ollama instance.
-	worker, err := embedder.NewWorker(refs, provider, vectors)
+	// output against a single local Ollama instance. EMBED_BENCH_BATCH_SIZE
+	// overrides the batch: a small batch amplifies the per-batch interval cost,
+	// which is how the greedy-drain win over the old one-batch-per-tick loop
+	// becomes visible on an Ollama-bound host.
+	var opts []embedder.Option
+	if batchSize > 0 {
+		opts = append(opts, embedder.WithBatchSize(batchSize))
+	}
+	worker, err := embedder.NewWorker(refs, provider, vectors, opts...)
 	if err != nil {
 		t.Fatalf("embedder.NewWorker: %v", err)
 	}
