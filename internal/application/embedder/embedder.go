@@ -306,25 +306,24 @@ func (w *Worker) drainPass(ctx context.Context) bool {
 		w.metrics.EmbedConcurrencyLimit.Set(float64(limit))
 	}
 
-	// Collect up to `limit` batches so the governed embed stage has enough
-	// work to fill its concurrency. Classification is reads-only plus
-	// dedup-Reuse writes, all on this goroutine.
-	jobs := make([]*batchJob, 0, limit)
-	full := true
-	for len(jobs) < limit {
-		pending, err := w.refs.FetchPending(ctx, w.batchSize)
-		if err != nil || len(pending) == 0 {
-			full = false
-			break
-		}
-		jobs = append(jobs, w.classify(ctx, pending))
-		if len(pending) < w.batchSize {
-			full = false // queue drained for now
-			break
-		}
-	}
-	if len(jobs) == 0 {
+	// Fetch this pass's rows in ONE query, then split into up to `limit`
+	// per-batch jobs for the governed embed stage. FetchPending does not claim
+	// rows - they stay 'pending' until the persist stage runs - so calling it
+	// once per batch would hand every batch the same top rows, double-embedding
+	// and double-writing at limit>1. A single fetch of limit*batchSize keeps
+	// the batches disjoint.
+	pending, err := w.refs.FetchPending(ctx, limit*w.batchSize)
+	if err != nil || len(pending) == 0 {
 		return false
+	}
+	// A full haul means the queue probably still has more - loop again
+	// immediately rather than falling back to the idle interval.
+	full := len(pending) == limit*w.batchSize
+
+	jobs := make([]*batchJob, 0, limit)
+	for start := 0; start < len(pending); start += w.batchSize {
+		end := min(start+w.batchSize, len(pending))
+		jobs = append(jobs, w.classify(ctx, pending[start:end]))
 	}
 
 	w.embedJobs(ctx, jobs)

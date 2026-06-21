@@ -893,6 +893,47 @@ func TestWorker_GovernorEnablesConcurrentEmbedding(t *testing.T) {
 	w.Wait()
 }
 
+// TestWorker_NoDoubleEmbedAtLimitGreaterThanOne is the regression for the
+// drainPass row-overlap bug: FetchPending does not claim rows, so collecting
+// `limit` batches by calling it once per batch handed every batch the same top
+// rows - at limit>1 each row was embedded once per batch. With distinct rows,
+// the total Embed count must equal the row count exactly.
+func TestWorker_NoDoubleEmbedAtLimitGreaterThanOne(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	const n = 6
+	for i := range n {
+		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
+	}
+
+	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
+	vs := &fakeVectorStore{}
+
+	// limit 3, batch 2 => the buggy loop fetched the same 2 rows 3x per pass.
+	w := mustNewWorker(t, repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithBatchSize(2),
+		embedder.WithGovernor(embedder.NewFixedGovernor(3)),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	if !waitForCondition(t, 3*time.Second, func() bool {
+		left, _ := repo.CountPending(ctx)
+		return left == 0
+	}) {
+		t.Fatal("queue never drained")
+	}
+	cancel()
+	w.Wait()
+
+	if got := emb.calls.Load(); got != int64(n) {
+		t.Fatalf("Embed calls = %d, want %d (one per distinct row; >n means rows were double-fetched across batches)", got, n)
+	}
+}
+
 // concurrencyProbe records the peak number of simultaneous Embed calls. Each
 // call releases the others once `target` are in flight, so the worker only
 // makes progress when the governor truly runs them concurrently; a safety
