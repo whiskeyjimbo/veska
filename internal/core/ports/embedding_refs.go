@@ -27,6 +27,23 @@ type PendingEmbedRef struct {
 	Text string
 }
 
+// EmbedInsert is one unique content-addressed embedding to store. The embedder
+// groups a drain batch's inserts so they share a single write transaction
+// instead of one transaction per row.
+type EmbedInsert struct {
+	ContentHash string
+	Dim         int
+	Embedding   []byte
+}
+
+// EmbedReadyRef flips one node_embedding_refs row to state='ready' against an
+// already-stored embedding - either a row freshly inserted in the same batch
+// or a content-addressed dedup hit.
+type EmbedReadyRef struct {
+	NodeID      string
+	ContentHash string
+}
+
 // EmbeddingRefRepo is the worker-side port for node_embedding_refs and the
 // content-addressed node_embeddings table.
 // The enqueue side (writing pending references) is not part of this port. Refs
