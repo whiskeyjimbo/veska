@@ -20,6 +20,12 @@ import (
 func testConfig(t *testing.T) Config {
 	t.Helper()
 	home := t.TempDir()
+	// newDaemon calls config.Load(), which reads the process VESKA_HOME (or
+	// ~/.veska/config.toml) - NOT cfg.VeskaHome. Point it at the empty temp
+	// home so wire tests see DefaultConfig; otherwise they inherit whatever
+	// the developer's real config enables (e.g. metrics) and assertions pass
+	// or fail by machine.
+	t.Setenv("VESKA_HOME", home)
 	return Config{
 		VeskaHome:     home,
 		SQLitePath:    filepath.Join(home, "veska.db"),
