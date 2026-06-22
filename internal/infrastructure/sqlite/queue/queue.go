@@ -8,9 +8,11 @@ package queue
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/platform/pollloop"
 )
 
 // WorkKind / WorkKind* / Row / WorkHandler are aliases of the canonical
@@ -126,48 +128,39 @@ func (p *Poller) Wait() {
 	<-p.done
 }
 
-// runKind is the per-work_kind poll loop.
+// runKind is the per-work_kind poll loop. It drains rows greedily - back to
+// back while any remain - falling back to the idle interval only once a tick
+// finds nothing. The previous one-row-per-interval cadence capped drain at
+// ~1 row / interval (e.g. 844 files = ~3.5min at the 250ms default); see
+// pollloop.Run for the shared rationale.
 func (p *Poller) runKind(ctx context.Context, kind WorkKind, handler WorkHandler) {
-	timer := time.NewTimer(0)
-	defer timer.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-		}
-
-		// Skip the tick if a cold scan is in flight - the post
-		// promotion queue's work routinely takes the Write lock
-		// for tens-to-hundreds of ms per processOne, and contending
-		// with a serial cold-scan promote turns a 1-minute scan into
-		// a 9-minute one ( pprof). The skip preserves the
-		// same poll cadence so resumption is immediate after End.
+	pollloop.Run(ctx, p.interval, func(ctx context.Context) bool {
+		// Yield the whole drain while a cold scan is in flight - the
+		// queue's work routinely takes the Write lock for tens-to-hundreds
+		// of ms per row, and contending with a serial cold-scan promote
+		// turns a 1-minute scan into a 9-minute one (pprof). Returning
+		// false idles for one interval, then we re-check.
 		if p.pauser != nil && p.pauser() {
-			timer.Reset(p.interval)
-			continue
+			return false
 		}
-
-		// processOne only returns errors for unexpected DB failures;
-		// handler errors are handled inline. We still wait the interval.
-		_ = p.processOne(ctx, kind, handler)
-
-		timer.Reset(p.interval)
-	}
+		return p.processOne(ctx, kind, handler)
+	})
 }
 
-// processOne fetches one pending row for kind and processes it.
-// Returns nil when no row is available or processing completes (success or failure logged on row).
-func (p *Poller) processOne(ctx context.Context, kind WorkKind, handler WorkHandler) error {
+// processOne fetches one pending row for kind and processes it. It returns
+// true when it processed a row (so the caller should poll again immediately),
+// false when the queue was empty or an unexpected DB error stalled this tick.
+// Handler errors are recorded on the row, not returned.
+func (p *Poller) processOne(ctx context.Context, kind WorkKind, handler WorkHandler) bool {
 	// Step 1: query next pending row.
 	row, err := p.fetchPending(ctx, kind)
 	if err != nil {
-		return err
+		slog.Warn("post-promotion queue: fetch pending failed", "work_kind", kind, "err", err)
+		return false
 	}
 	if row == nil {
 		// No pending row; nothing to do.
-		return nil
+		return false
 	}
 
 	// Step 2: CAS transition pending → in_progress.
@@ -176,15 +169,17 @@ func (p *Poller) processOne(ctx context.Context, kind WorkKind, handler WorkHand
 		row.Seq,
 	)
 	if err != nil {
-		return err
+		slog.Warn("post-promotion queue: claim row failed", "work_kind", kind, "seq", row.Seq, "err", err)
+		return false
 	}
 	affected, err := res.RowsAffected()
 	if err != nil {
-		return err
+		slog.Warn("post-promotion queue: rows-affected failed", "work_kind", kind, "seq", row.Seq, "err", err)
+		return false
 	}
 	if affected == 0 {
 		// Another goroutine grabbed it (shouldn't happen with one goroutine per kind).
-		return nil
+		return false
 	}
 
 	// Re-read attempts from DB after increment so our local Row reflects reality.
@@ -196,11 +191,14 @@ func (p *Poller) processOne(ctx context.Context, kind WorkKind, handler WorkHand
 	now := time.Now().Unix()
 	if handlerErr == nil {
 		// Step 4a: success.
-		_, err = p.writeDB.ExecContext(ctx,
+		if _, err = p.writeDB.ExecContext(ctx,
 			`UPDATE post_promotion_queue SET state='done', completed_at=? WHERE seq=?`,
 			now, row.Seq,
-		)
-		return err
+		); err != nil {
+			slog.Warn("post-promotion queue: mark done failed", "work_kind", kind, "seq", row.Seq, "err", err)
+		}
+		// A row was processed regardless of the bookkeeping outcome - poll again.
+		return true
 	}
 
 	// Step 4b: failure - re-queue or fail permanently.
@@ -215,7 +213,10 @@ func (p *Poller) processOne(ctx context.Context, kind WorkKind, handler WorkHand
 			handlerErr.Error(), row.Seq,
 		)
 	}
-	return err
+	if err != nil {
+		slog.Warn("post-promotion queue: record handler failure failed", "work_kind", kind, "seq", row.Seq, "err", err)
+	}
+	return true
 }
 
 // fetchPending queries the next pending row for the given work_kind.

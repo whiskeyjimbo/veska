@@ -32,6 +32,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
+	"github.com/whiskeyjimbo/veska/internal/platform/pollloop"
 )
 
 // DefaultBatchSize is the maximum number of refs drained per batch (M3 §m3.02).
@@ -243,36 +244,15 @@ func (w *Worker) Stop() {
 func (w *Worker) Wait() { <-w.done }
 
 // run is the poll loop body. It exits when ctx is canceled.
+//
+// Greedy drain: drainPass runs back-to-back while the queue keeps yielding
+// full loads, falling back to the idle interval only once a pass comes up
+// short (drainPass also returns false while paused). The shared pollloop.Run
+// encodes that "don't sleep a full interval between batches" rule - see its
+// doc for why.
 func (w *Worker) run(ctx context.Context) {
 	defer close(w.done)
-
-	timer := time.NewTimer(0)
-	defer timer.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-		}
-
-		// Greedy drain: run passes back-to-back while the queue keeps
-		// yielding full loads. Only fall back to the idle interval once a
-		// pass comes up short. The prior code waited a full interval
-		// between every batch, capping backlog drain at ~batchSize/interval
-		// regardless of how fast the host could embed.
-		for {
-			full := w.drainPass(ctx)
-			if ctx.Err() != nil {
-				return
-			}
-			if !full {
-				break
-			}
-		}
-
-		timer.Reset(w.interval)
-	}
+	pollloop.Run(ctx, w.interval, w.drainPass)
 }
 
 // drainPass performs one drain attempt and reports whether it drained a full
