@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -87,23 +89,34 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 
 	// Sinks and node updates are executed first so that nodes exist before
 	// edge resolution binds caller-callee links.
-	for _, phase := range []func(context.Context) error{
-		p.promoteFiles,
-		p.enqueueWiki,
-		p.insertParserEdges,
-		p.resolveIntraPackageCalls,
-		p.resolveCrossPackageCalls,
-		p.advanceRepoSHA,
+	// Each phase is timed so perf work can attribute the in-transaction cost
+	// without a profiler; logged once per promotion at Info.
+	for _, phase := range []struct {
+		name string
+		fn   func(context.Context) error
+	}{
+		{"promoteFiles", p.promoteFiles},
+		{"enqueueWiki", p.enqueueWiki},
+		{"insertParserEdges", p.insertParserEdges},
+		{"resolveIntraPackageCalls", p.resolveIntraPackageCalls},
+		{"resolveCrossPackageCalls", p.resolveCrossPackageCalls},
+		{"advanceRepoSHA", p.advanceRepoSHA},
 	} {
-		if err := phase(ctx); err != nil {
+		phaseStart := time.Now()
+		if err := phase.fn(ctx); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
+		slog.Info("promotion phase done", "phase", phase.name,
+			"elapsed_ms", time.Since(phaseStart).Milliseconds())
 	}
 
+	commitStart := time.Now()
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("promoter: commit: %w", err)
 	}
+	slog.Info("promotion phase done", "phase", "commit",
+		"elapsed_ms", time.Since(commitStart).Milliseconds())
 	return nil
 }
 

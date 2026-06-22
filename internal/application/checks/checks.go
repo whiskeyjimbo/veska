@@ -187,11 +187,17 @@ func (r *Runner) runOne(ctx context.Context, c Check, in Input) {
 		if rec := recover(); rec != nil {
 			r.warn(in, c, "check panicked", "panic", rec)
 		}
+		elapsed := time.Since(start)
 		if r.metrics != nil && r.metrics.CheckLatency != nil {
 			r.metrics.CheckLatency.
 				WithLabelValues(in.RepoID, c.Name()).
-				Observe(time.Since(start).Seconds())
+				Observe(elapsed.Seconds())
 		}
+		// Per-check wall-clock so a cold-scan daemon log attributes the
+		// promote-phase cost without scraping Prometheus.
+		r.logger.Info("check: done",
+			"check", c.Name(), "repo_id", in.RepoID,
+			"elapsed_ms", elapsed.Milliseconds())
 	}()
 
 	findings, err := c.Run(ctx, in)
