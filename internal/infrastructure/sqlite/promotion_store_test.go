@@ -150,6 +150,46 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	}
 }
 
+// TestPromotionStore_FileImportsExcludeOwnModule pins that a repo's own-module
+// imports (which look third-party but live under the repo's module_path) are
+// NOT recorded as dependencies, while genuine external imports are.
+func TestPromotionStore_FileImportsExcludeOwnModule(t *testing.T) {
+	t.Parallel()
+	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
+	if _, err := db.Exec(
+		`INSERT INTO repos (repo_id, root_path, added_at, module_path) VALUES (?, ?, ?, ?)`,
+		"repo1", "/tmp/modbeta", time.Now().UnixMilli(), "example.com/modbeta",
+	); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	store := sqlite.NewPromotionStore(db, []sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()})
+	n1 := mustNode(t, "n1", "/tmp/modbeta/main.go", "main", domain.KindFunction)
+
+	if err := store.Promote(context.Background(), application.PromotionBatch{
+		RepoID: "repo1", Branch: "main", GitSHA: "sha1", Actor: systemActor(),
+		PromotedAt: time.Now().UnixMilli(),
+		Files: []application.PromotionFile{{
+			Path: "/tmp/modbeta/main.go", Nodes: []*domain.Node{n1},
+			Imports: map[string]string{
+				"widget": "example.com/modbeta/widget",  // own module - must be excluded
+				"metric": "example.com/modalpha/metric", // genuine external dep
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+
+	var have string
+	if err := db.QueryRow(
+		`SELECT COALESCE(GROUP_CONCAT(import_path, ','), '') FROM file_imports WHERE repo_id='repo1' AND branch='main'`,
+	).Scan(&have); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if have != "example.com/modalpha/metric" {
+		t.Errorf("file_imports = %q, want only the external dep (own-module import must be excluded)", have)
+	}
+}
+
 func TestPromotionStore_PersistsFileImports(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
