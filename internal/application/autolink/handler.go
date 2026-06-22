@@ -340,6 +340,7 @@ func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []C
 	// Cache source-node content hashes across the candidate set so a handful
 	// of source nodes per file do not turn into N look-ups when k >> 1.
 	hashCache := make(map[string]string, len(nodeIDs))
+	built := make([]*domain.Finding, 0, len(cands))
 	for i, c := range cands {
 		e := edges[i]
 		hash, ok := hashCache[c.SourceNodeID]
@@ -390,11 +391,38 @@ func (h *Handler) emitFindings(ctx context.Context, row ports.WorkRow, cands []C
 		if err != nil {
 			return fmt.Errorf("autolink.Handle: build finding: %w", err)
 		}
+		built = append(built, f)
+	}
+
+	return h.saveFindings(ctx, built)
+}
+
+// batchFindingSaver is the optional fast path: a FindingStorage that can upsert
+// a whole slice in one transaction. sqlite.FindingRepo implements it; the
+// per-row Save fallback keeps test fakes and other stores working unchanged.
+type batchFindingSaver interface {
+	SaveBatch(ctx context.Context, findings []*domain.Finding) error
+}
+
+// saveFindings writes a file's findings in one transaction when the storage
+// supports it, else falls back to per-finding Save. On a cold scan a file emits
+// up to k findings per source node; the batch path collapses thousands of
+// per-row WAL commits into one per file.
+func (h *Handler) saveFindings(ctx context.Context, findings []*domain.Finding) error {
+	if len(findings) == 0 {
+		return nil
+	}
+	if bs, ok := h.findings.(batchFindingSaver); ok {
+		if err := bs.SaveBatch(ctx, findings); err != nil {
+			return fmt.Errorf("autolink.Handle: save findings: %w", err)
+		}
+		return nil
+	}
+	for _, f := range findings {
 		if err := h.findings.Save(ctx, f); err != nil {
 			return fmt.Errorf("autolink.Handle: save finding: %w", err)
 		}
 	}
-
 	return nil
 }
 
