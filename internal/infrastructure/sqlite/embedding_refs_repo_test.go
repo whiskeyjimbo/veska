@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
@@ -47,6 +48,50 @@ func openTestDB(t *testing.T) (*sql.DB, *sqlite.EmbeddingRefsRepo) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db, sqlite.NewEmbeddingRefsRepo(db, db)
+}
+
+func TestEmbeddingRefsRepo_ApplyEmbedBatch(t *testing.T) {
+	t.Parallel()
+	db, repo := openTestDB(t)
+	seedRefRow(t, db, "r1", "n1") // ready: insert h1 + flip
+	seedRefRow(t, db, "r1", "n2") // ready: dedup hit on h1, no second insert
+	seedRefRow(t, db, "r1", "n3") // failed: bump attempts
+
+	now := time.UnixMilli(1000)
+	err := repo.ApplyEmbedBatch(context.Background(),
+		[]ports.EmbedInsert{{ContentHash: "h1", Dim: 3, Embedding: []byte{1, 2, 3}}},
+		[]ports.EmbedReadyRef{{NodeID: "n1", ContentHash: "h1"}, {NodeID: "n2", ContentHash: "h1"}},
+		[]string{"n3"},
+		"model-x", 3, now,
+	)
+	if err != nil {
+		t.Fatalf("ApplyEmbedBatch: %v", err)
+	}
+
+	assertRef := func(node, wantState string, wantAttempts int) {
+		t.Helper()
+		var state string
+		var attempts int
+		if err := db.QueryRow(`SELECT state, attempts FROM node_embedding_refs WHERE node_id=?`, node).
+			Scan(&state, &attempts); err != nil {
+			t.Fatalf("query %s: %v", node, err)
+		}
+		if state != wantState || attempts != wantAttempts {
+			t.Errorf("%s: got state=%q attempts=%d, want %q/%d", node, state, attempts, wantState, wantAttempts)
+		}
+	}
+	assertRef("n1", "ready", 0)
+	assertRef("n2", "ready", 0)
+	assertRef("n3", "pending", 1)
+
+	// The dedup ready ref must NOT have inserted a second embedding row.
+	var nEmb int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM node_embeddings WHERE content_hash='h1'`).Scan(&nEmb); err != nil {
+		t.Fatalf("count embeddings: %v", err)
+	}
+	if nEmb != 1 {
+		t.Errorf("node_embeddings rows for h1: want 1, got %d", nEmb)
+	}
 }
 
 func TestEmbeddingRefsRepo_MarkAttemptFailed_BumpsAttempts(t *testing.T) {

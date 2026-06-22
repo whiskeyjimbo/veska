@@ -137,6 +137,92 @@ func (r *EmbeddingRefsRepo) MarkReady(
 	return nil
 }
 
+// ApplyEmbedBatch persists one drain batch's results in a SINGLE write
+// transaction: inserts each unique embedding (idempotent on content_hash),
+// flips every ready ref to state='ready', and bumps attempts for failed
+// node_ids. This replaces the per-row MarkReady/Reuse/MarkAttemptFailed
+// transactions - on a cold-scan backfill that was up to 32 serializable commits
+// per batch, the bulk of the per-row cost. Statements are prepared once and
+// reused across the batch. All-or-nothing: a failure rolls the batch back,
+// leaving the rows pending for a later pass.
+func (r *EmbeddingRefsRepo) ApplyEmbedBatch(
+	ctx context.Context,
+	inserts []ports.EmbedInsert,
+	ready []ports.EmbedReadyRef,
+	failed []string,
+	modelID string,
+	maxAttempts int,
+	at time.Time,
+) error {
+	if len(inserts) == 0 && len(ready) == 0 && len(failed) == 0 {
+		return nil
+	}
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+	ms := at.UnixMilli()
+
+	tx, err := r.writeDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return fmt.Errorf("embedding_refs: apply batch begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	if len(inserts) > 0 {
+		ins, err := tx.PrepareContext(ctx, `
+			INSERT INTO node_embeddings(content_hash, model, dim, embedding, created_at)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(content_hash) DO NOTHING`)
+		if err != nil {
+			return fmt.Errorf("embedding_refs: apply batch prepare insert: %w", err)
+		}
+		defer ins.Close()
+		for _, e := range inserts {
+			if _, err := ins.ExecContext(ctx, e.ContentHash, modelID, e.Dim, e.Embedding, ms); err != nil {
+				return fmt.Errorf("embedding_refs: apply batch insert: %w", err)
+			}
+		}
+	}
+
+	if len(ready) > 0 {
+		upd, err := tx.PrepareContext(ctx, `
+			UPDATE node_embedding_refs
+			SET state='ready', content_hash=?, embedded_at=?
+			WHERE node_id=?`)
+		if err != nil {
+			return fmt.Errorf("embedding_refs: apply batch prepare ready: %w", err)
+		}
+		defer upd.Close()
+		for _, rr := range ready {
+			if _, err := upd.ExecContext(ctx, rr.ContentHash, ms, rr.NodeID); err != nil {
+				return fmt.Errorf("embedding_refs: apply batch mark ready: %w", err)
+			}
+		}
+	}
+
+	if len(failed) > 0 {
+		fl, err := tx.PrepareContext(ctx, `
+			UPDATE node_embedding_refs
+			SET attempts = attempts + 1,
+			    state = CASE WHEN attempts + 1 >= ? THEN 'failed' ELSE state END
+			WHERE node_id = ? AND state = 'pending'`)
+		if err != nil {
+			return fmt.Errorf("embedding_refs: apply batch prepare failed: %w", err)
+		}
+		defer fl.Close()
+		for _, nid := range failed {
+			if _, err := fl.ExecContext(ctx, maxAttempts, nid); err != nil {
+				return fmt.Errorf("embedding_refs: apply batch mark failed: %w", err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("embedding_refs: apply batch commit: %w", err)
+	}
+	return nil
+}
+
 // MarkAttemptFailed increments the attempt counter and transitions the state to
 // failed if maxAttempts is reached. This update is executed as a single query to
 // prevent concurrent fetch operations from observing a pending row with exceeded

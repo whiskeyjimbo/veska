@@ -61,9 +61,11 @@ type EmbedRefQueue interface {
 	FetchPending(ctx context.Context, limit int) ([]ports.PendingEmbedRef, error)
 	CountPending(ctx context.Context) (int, error)
 	LookupExisting(ctx context.Context, contentHash string) (embedding []byte, dim int, found bool, err error)
-	MarkReady(ctx context.Context, nodeID, contentHash, modelID string, dim int, embedding []byte, at time.Time) error
-	MarkAttemptFailed(ctx context.Context, nodeID string, maxAttempts int) error
-	Reuse(ctx context.Context, nodeID, contentHash string, at time.Time) error
+	// ApplyEmbedBatch flushes a whole drain batch's writes in one transaction:
+	// unique embedding inserts, ready-ref flips (fresh + dedup hits), and
+	// attempt bumps for failures. Replaces the per-row MarkReady/Reuse/
+	// MarkAttemptFailed calls that each opened their own transaction.
+	ApplyEmbedBatch(ctx context.Context, inserts []ports.EmbedInsert, ready []ports.EmbedReadyRef, failed []string, modelID string, maxAttempts int, at time.Time) error
 }
 
 // Worker drains pending node_embedding_refs, embeds them, and upserts
@@ -371,6 +373,13 @@ type batchJob struct {
 	// canceled or a Retry-After backoff outlasted the pass). The batch's
 	// rows are left pending for a later retry - NOT counted as attempts.
 	acquireErr error
+
+	// Deferred writes, flushed in one ApplyEmbedBatch transaction by persist.
+	// inserts holds unique embeddings to store; readyRefs the refs to flip
+	// (fresh successes + classify's dedup hits); failed the node_ids to bump.
+	inserts   []ports.EmbedInsert
+	readyRefs []ports.EmbedReadyRef
+	failed    []string
 }
 
 // classify resolves the fast-path refs (intra-pass dedup cache and
@@ -392,25 +401,23 @@ func (w *Worker) classify(ctx context.Context, pending []ports.PendingEmbedRef) 
 
 		contentHash := hashEmbedText(job.modelID, ref.Text)
 
-		// Fast path 1: this pass already embedded this exact key.
+		// Fast path 1: this pass already embedded this exact key. The ref
+		// flip is deferred into the batch's ApplyEmbedBatch (no insert - the
+		// embedding is already being stored by the first occurrence).
 		if vec, ok := job.inFlight[contentHash]; ok {
-			if err := w.refs.Reuse(ctx, ref.NodeID, contentHash, job.now); err != nil {
-				continue
-			}
+			job.readyRefs = append(job.readyRefs, ports.EmbedReadyRef{NodeID: ref.NodeID, ContentHash: contentHash})
 			w.dedupHit()
 			w.enqueueVec(job, ref, contentHash, vec)
 			continue
 		}
 
 		// Fast path 2: a prior pass already embedded this key - the bytes
-		// are in node_embeddings.
+		// are in node_embeddings. Flip deferred; no insert needed.
 		if blob, dim, found, err := w.refs.LookupExisting(ctx, contentHash); err == nil && found {
 			vec := veccodec.DecodeFloat32LE(blob, dim)
-			if err := w.refs.Reuse(ctx, ref.NodeID, contentHash, job.now); err != nil {
-				continue
-			}
-			w.dedupHit()
 			job.inFlight[contentHash] = vec
+			job.readyRefs = append(job.readyRefs, ports.EmbedReadyRef{NodeID: ref.NodeID, ContentHash: contentHash})
+			w.dedupHit()
 			w.enqueueVec(job, ref, contentHash, vec)
 			continue
 		}
@@ -522,39 +529,43 @@ func (w *Worker) embedTexts(ctx context.Context, uniqueTexts []string) (uniqueVe
 // accumulated vectors are upserted into VectorStorage. Runs serially on the
 // drain goroutine - the only place embed results turn into SQL writes.
 func (w *Worker) persist(ctx context.Context, job *batchJob) {
-	// Skip the embed-result rows when the permit was never acquired: the rows
-	// stay pending for a later retry rather than burning an attempt. Fast-path
-	// vectors enqueued during classify are still upserted below.
+	// Build the batch's writes. Skip the embed-result rows when the permit was
+	// never acquired: the rows stay pending for a later retry rather than
+	// burning an attempt. classify's dedup hits are already in job.readyRefs.
 	if job.acquireErr == nil {
 		for _, p := range job.needsEmbed {
 			slot := job.uniqueByHash[p.contentHash]
 			if job.failedTexts[slot] {
-				_ = w.refs.MarkAttemptFailed(ctx, p.ref.NodeID, w.maxAttempts)
+				job.failed = append(job.failed, p.ref.NodeID)
 				continue
 			}
 			vec := job.uniqueVecs[slot]
 			if len(vec) == 0 {
 				continue
 			}
-			// First time we see this content_hash, do the L2 normalize +
-			// node_embeddings INSERT. Siblings reuse via the inFlight cache.
+			// First time we see this content_hash, normalize + queue the
+			// node_embeddings INSERT. Siblings reuse via the inFlight cache;
+			// the INSERT's ON CONFLICT covers any cross-job duplicate.
 			existing, cached := job.inFlight[p.contentHash]
 			if !cached {
 				l2Normalize(vec)
 				blob := veccodec.EncodeFloat32LE(vec)
-				if err := w.refs.MarkReady(ctx, p.ref.NodeID, p.contentHash, job.modelID, len(vec), blob, job.now); err != nil {
-					continue
-				}
+				job.inserts = append(job.inserts, ports.EmbedInsert{ContentHash: p.contentHash, Dim: len(vec), Embedding: blob})
 				job.inFlight[p.contentHash] = vec
 				existing = vec
 			} else {
-				if err := w.refs.Reuse(ctx, p.ref.NodeID, p.contentHash, job.now); err != nil {
-					continue
-				}
 				w.dedupHit()
 			}
+			job.readyRefs = append(job.readyRefs, ports.EmbedReadyRef{NodeID: p.ref.NodeID, ContentHash: p.contentHash})
 			w.enqueueVec(job, p.ref, p.contentHash, existing)
 		}
+	}
+
+	// One transaction for the whole batch's writes. On failure the rows stay
+	// pending; skip the vector upsert so the store never holds vectors for
+	// refs the DB still considers unembedded.
+	if err := w.refs.ApplyEmbedBatch(ctx, job.inserts, job.readyRefs, job.failed, job.modelID, w.maxAttempts, job.now); err != nil {
+		return
 	}
 
 	for k, batch := range job.vecBatches {
