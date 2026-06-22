@@ -125,7 +125,9 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 	// Start a tracing span to benchmark the atomic promotion transaction. Empty
 	// batches are still sent to the store to run repo registration guards.
 	ctx, span := observability.StartSpan(ctx, p.tracerProvider(), "promotion.transaction")
+	txnStart := time.Now()
 	err := p.store.Promote(ctx, batch)
+	txnMS := time.Since(txnStart).Milliseconds()
 	span.End()
 	if err != nil {
 		slog.Error("promotion: failed",
@@ -153,15 +155,21 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 		p.staging.DeleteStagedFile(repoID, branch, f.Path)
 	}
 
+	// Split the post-transaction cost so perf work can see where the promote
+	// phase spends its time: added-lines fetch vs the structural-check pipeline.
+	var addedMS, checksMS int64
 	if p.checks != nil {
 		// Seam errors when fetching added lines are ignored since checks can degrade
 		// gracefully to run without diff context.
 		var addedLines map[string][]Line
 		if p.added != nil {
+			addedStart := time.Now()
 			if al, err := p.added(ctx, repoID, gitSHA); err == nil {
 				addedLines = al
 			}
+			addedMS = time.Since(addedStart).Milliseconds()
 		}
+		checksStart := time.Now()
 		p.checks.Run(ctx, CheckRunInput{
 			RepoID:     repoID,
 			Branch:     branch,
@@ -169,11 +177,15 @@ func (p *Promoter) Promote(ctx context.Context, repoID, branch, gitSHA string, a
 			FilePaths:  filePaths,
 			AddedLines: addedLines,
 		})
+		checksMS = time.Since(checksStart).Milliseconds()
 	}
 
 	slog.Info("promotion: complete",
 		"repo_id", repoID, "branch", branch, "git_sha", gitSHA,
 		"files", len(batch.Files),
+		"txn_ms", txnMS,
+		"added_ms", addedMS,
+		"checks_ms", checksMS,
 		"elapsed_ms", time.Since(promoteStart).Milliseconds(),
 	)
 	return nil
