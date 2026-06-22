@@ -74,11 +74,15 @@ func TestQueueFuzz(t *testing.T) {
 		ports.WorkKindEmbed:      stub,
 		ports.WorkKindAutoLink:   stub,
 		ports.WorkKindRevalidate: stub,
+		// Promote also enqueues one wiki row per promotion. Without a handler
+		// for it those rows stay 'pending' forever and waitDrain (which counts
+		// every kind) never reaches zero - so register a stub here too.
+		ports.WorkKindWiki: stub,
 	}
 
 	// Tight poll interval keeps the fuzz responsive without hammering the
 	// DB. 25ms is well below the budget granularity.
-	poller := queue.NewWithInterval(pools.ReadDB, pools.Write, handlers, 25*time.Millisecond)
+	poller := queue.New(pools.ReadDB, pools.Write, handlers, queue.WithInterval(25*time.Millisecond))
 	poller.Start(ctx)
 	t.Cleanup(func() {
 		cancel()
