@@ -93,6 +93,27 @@ func (s *Store) UpsertEmbeddings(_ context.Context, repoID, branch string, batch
 	return nil
 }
 
+// DeleteNodes removes the given node_ids from every partition matching
+// (repoID, branch), across model partitions. Unknown ids and an empty slice
+// are no-ops. Backs the re-promote drop-symbol cleanup so stale vectors don't
+// linger as scan candidates.
+func (s *Store) DeleteNodes(_ context.Context, repoID, branch string, nodeIDs []string) error {
+	if len(nodeIDs) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, p := range s.partitions {
+		if k.repoID != repoID || k.branch != branch {
+			continue
+		}
+		for _, id := range nodeIDs {
+			delete(p, id)
+		}
+	}
+	return nil
+}
+
 // candidate is a node and its squared L2 distance to the query vector.
 type candidate struct {
 	nodeID string

@@ -34,6 +34,14 @@ type PromotionStore struct {
 	reviewEnabled  bool
 	summaryEnabled bool
 	workKinds      []string
+
+	// vectorPruner, when set, is called after the promotion commits with the
+	// node_ids a re-promote dropped, so the vector store can evict their stale
+	// vectors. It's an injected callback (not a direct dependency) so this
+	// adapter never imports the vector backend - the daemon wires it to
+	// VectorStorage.DeleteNodes. Runs post-commit: a rolled-back promote leaves
+	// the vectors in place, matching the unchanged node rows.
+	vectorPruner func(ctx context.Context, repoID, branch string, nodeIDs []string) error
 }
 
 // PromotionStoreOption configures a PromotionStore at construction time.
@@ -47,6 +55,12 @@ func WithReviewEnabled(enabled bool) PromotionStoreOption {
 // WithSummaryEnabled configures whether the optional WorkKindSummary lane is enqueued.
 func WithSummaryEnabled(enabled bool) PromotionStoreOption {
 	return func(s *PromotionStore) { s.summaryEnabled = enabled }
+}
+
+// WithVectorPruner injects the callback invoked post-commit with the node_ids a
+// re-promote dropped, so their stale vectors can be evicted. nil disables it.
+func WithVectorPruner(fn func(ctx context.Context, repoID, branch string, nodeIDs []string) error) PromotionStoreOption {
+	return func(s *PromotionStore) { s.vectorPruner = fn }
 }
 
 // NewPromotionStore constructs a PromotionStore with the given database handle
@@ -117,6 +131,17 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 	}
 	slog.Info("promotion phase done", "phase", "commit",
 		"elapsed_ms", time.Since(commitStart).Milliseconds())
+
+	// Post-commit: evict the vectors of symbols this promote dropped. Best
+	// effort - a failure leaves stale vectors (the pre-fix status quo), which
+	// search already filters out, so it must not fail the promotion.
+	if s.vectorPruner != nil && len(p.deletedNodeIDs) > 0 {
+		if err := s.vectorPruner(ctx, batch.RepoID, batch.Branch, p.deletedNodeIDs); err != nil {
+			slog.Warn("promotion: vector prune failed",
+				"repo_id", batch.RepoID, "branch", batch.Branch,
+				"deleted", len(p.deletedNodeIDs), "err", err)
+		}
+	}
 	return nil
 }
 
@@ -154,6 +179,11 @@ type promotion struct {
 	delImports *sql.Stmt
 	insImports *sql.Stmt
 	edge       *sql.Stmt
+
+	// deletedNodeIDs accumulates node_ids present before promotion but absent
+	// from the new file set (symbols a re-promote dropped). Drained to the
+	// vector pruner after commit.
+	deletedNodeIDs []string
 }
 
 func (s *PromotionStore) newPromotion(ctx context.Context, tx *sql.Tx, batch application.PromotionBatch, root, module string) (*promotion, error) {
@@ -266,6 +296,21 @@ func (p *promotion) promoteFile(ctx context.Context, file application.PromotionF
 	prevSig, err := p.capturePrevSignatures(ctx, file.Path)
 	if err != nil {
 		return err
+	}
+	// Record node_ids that existed before but are not in the new file set -
+	// symbols this re-promote dropped. node_id is stable across re-promotes, so
+	// a surviving symbol keeps its id (and gets re-embedded); only genuine
+	// deletions land here, to be pruned from the vector store after commit.
+	if p.s.vectorPruner != nil && len(prevSig) > 0 {
+		newIDs := make(map[string]struct{}, len(file.Nodes))
+		for _, n := range file.Nodes {
+			newIDs[string(n.ID)] = struct{}{}
+		}
+		for oldID := range prevSig {
+			if _, kept := newIDs[oldID]; !kept {
+				p.deletedNodeIDs = append(p.deletedNodeIDs, oldID)
+			}
+		}
 	}
 	// Pre-delete hooks are run before database deletions so sinks can query
 	// active node rows.

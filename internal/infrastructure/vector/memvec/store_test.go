@@ -56,6 +56,47 @@ func TestUpsertAndSearch(t *testing.T) {
 }
 
 // TestUpsertReplaces verifies that upserting an existing node identifier replaces the row and updates the vector.
+// TestDeleteNodesRemovesFromSearch is the regression for solov2-524u: a deleted
+// node's vector must stop appearing as a scan candidate without a daemon restart.
+func TestDeleteNodesRemovesFromSearch(t *testing.T) {
+	s := memvec.New()
+	ctx := context.Background()
+	if err := s.UpsertEmbeddings(ctx, testRepo, testBranch, []domain.EmbeddingRow{
+		makeRow("keep", vec(1, 0, 0)),
+		makeRow("drop", vec(0, 1, 0)),
+	}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	if hits, _ := s.Search(ctx, testRepo, testBranch, vec(0, 1, 0), 2, domain.VectorFilter{}); len(hits) != 2 {
+		t.Fatalf("pre-delete: want 2 hits, got %d", len(hits))
+	}
+
+	if err := s.DeleteNodes(ctx, testRepo, testBranch, []string{"drop"}); err != nil {
+		t.Fatalf("DeleteNodes: %v", err)
+	}
+
+	// "drop" must no longer surface, even querying its exact vector.
+	hits, _ := s.Search(ctx, testRepo, testBranch, vec(0, 1, 0), 2, domain.VectorFilter{})
+	if len(hits) != 1 || hits[0].NodeID != "keep" {
+		t.Fatalf("post-delete: want only [keep], got %+v", hits)
+	}
+
+	// Unknown ids, empty slice, and a wrong-partition delete are all no-ops.
+	if err := s.DeleteNodes(ctx, testRepo, testBranch, []string{"nope"}); err != nil {
+		t.Fatalf("DeleteNodes unknown: %v", err)
+	}
+	if err := s.DeleteNodes(ctx, testRepo, testBranch, nil); err != nil {
+		t.Fatalf("DeleteNodes empty: %v", err)
+	}
+	if err := s.DeleteNodes(ctx, "other", testBranch, []string{"keep"}); err != nil {
+		t.Fatalf("DeleteNodes other repo: %v", err)
+	}
+	if hits, _ := s.Search(ctx, testRepo, testBranch, vec(1, 0, 0), 1, domain.VectorFilter{}); len(hits) != 1 {
+		t.Fatalf("keep wrongly removed by other-repo delete")
+	}
+}
+
 func TestUpsertReplaces(t *testing.T) {
 	s := memvec.New()
 	ctx := context.Background()

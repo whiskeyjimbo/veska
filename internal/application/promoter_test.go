@@ -16,7 +16,58 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/staging"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
+	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/memvec"
 )
+
+// TestPromote_PrunesDroppedNodeVectors is the integration half of solov2-524u:
+// when a re-promote drops a symbol, the promote path evicts its vector from the
+// store so it stops surfacing in search, without a daemon restart.
+func TestPromote_PrunesDroppedNodeVectors(t *testing.T) {
+	db := openMemDB(t)
+	insertTestRepo(t, db, "repo-vp")
+	ctx := context.Background()
+	actor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
+
+	vstore := memvec.New()
+	if err := vstore.UpsertEmbeddings(ctx, "repo-vp", "main", []domain.EmbeddingRow{
+		{NodeID: "n1", Vector: []float32{1, 0}, ContentHash: "h1", ModelID: "m"},
+		{NodeID: "n2", Vector: []float32{0, 1}, ContentHash: "h2", ModelID: "m"},
+	}); err != nil {
+		t.Fatalf("seed vectors: %v", err)
+	}
+
+	store := sqlite.NewPromotionStore(db,
+		[]sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()},
+		sqlite.WithVectorPruner(vstore.DeleteNodes))
+	sa := staging.NewArea()
+	p := application.NewPromoter(sa, store)
+
+	mk := func(id string) *domain.Node {
+		n, _ := domain.NewNode(domain.NodeSpec{ID: id, Path: "f.go", Name: id, Kind: domain.KindFunction})
+		return n
+	}
+
+	// Promote 1: both nodes. No prior nodes, so nothing is pruned.
+	sa.Stage("repo-vp", "main", "f.go", staging.File{Nodes: []*domain.Node{mk("n1"), mk("n2")}})
+	if err := p.Promote(ctx, "repo-vp", "main", "sha1", actor); err != nil {
+		t.Fatalf("Promote 1: %v", err)
+	}
+	if hits, _ := vstore.Search(ctx, "repo-vp", "main", []float32{0, 1}, 2, domain.VectorFilter{}); len(hits) != 2 {
+		t.Fatalf("pre-drop: want 2 vectors searchable, got %d", len(hits))
+	}
+
+	// Re-promote with only n1. n2 was dropped, so its vector must be pruned.
+	sa.Stage("repo-vp", "main", "f.go", staging.File{Nodes: []*domain.Node{mk("n1")}})
+	if err := p.Promote(ctx, "repo-vp", "main", "sha2", actor); err != nil {
+		t.Fatalf("Promote 2: %v", err)
+	}
+	hits, _ := vstore.Search(ctx, "repo-vp", "main", []float32{0, 1}, 2, domain.VectorFilter{})
+	for _, h := range hits {
+		if h.NodeID == "n2" {
+			t.Fatalf("n2 vector still present after it was dropped from f.go: %+v", hits)
+		}
+	}
+}
 
 // newTestPromoter wires a Promoter to a real sqlite.PromotionStore over the
 // given test DB, with the production FTS + embedding-ref sinks registered.
