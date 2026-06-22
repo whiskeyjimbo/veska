@@ -86,7 +86,8 @@ type fakeVectors struct {
 func (fv *fakeVectors) UpsertEmbeddings(context.Context, string, string, []domain.EmbeddingRow) error {
 	return nil
 }
-func (fv *fakeVectors) Reindex(context.Context, string, string) error { return nil }
+func (fv *fakeVectors) DeleteNodes(context.Context, string, string, []string) error { return nil }
+func (fv *fakeVectors) Reindex(context.Context, string, string) error               { return nil }
 func (fv *fakeVectors) LookupContentHashes(context.Context, string, string, []string) (map[string]string, error) {
 	return nil, nil
 }

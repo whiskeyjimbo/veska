@@ -260,7 +260,8 @@ func (b *daemonBuilder) buildCore() error {
 
 	core := composition.NewColdScanCore(b.pools, ingesterOpts, promoterOpts,
 		composition.WithReviewEnabled(b.fileCfg.Review.Enabled),
-		composition.WithSummaryEnabled(b.fileCfg.Summary.Enabled))
+		composition.WithSummaryEnabled(b.fileCfg.Summary.Enabled),
+		composition.WithVectorPruner(b.vec.DeleteNodes))
 	b.staging = core.Staging
 	b.gate = core.Gate
 	b.ingester = core.Ingester

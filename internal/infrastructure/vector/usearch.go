@@ -113,6 +113,31 @@ type UsearchStore struct {
 	indexes map[indexKey]*indexEntry
 }
 
+// DeleteNodes drops the given node_ids from every index matching (repoID,
+// branch). It untracks them in the metadata maps - the same mechanism upsert
+// uses for replacement - so they no longer surface in Search; the native HNSW
+// slot is left as a tombstone (the usearch API has no delete). Unknown ids and
+// an empty slice are no-ops.
+func (s *UsearchStore) DeleteNodes(_ context.Context, repoID, branch string, nodeIDs []string) error {
+	if len(nodeIDs) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, e := range s.indexes {
+		if k.repoID != repoID || k.branch != branch {
+			continue
+		}
+		for _, nid := range nodeIDs {
+			if id, ok := e.nodeToID[nid]; ok {
+				delete(e.rows, id)
+				delete(e.nodeToID, nid)
+			}
+		}
+	}
+	return nil
+}
+
 // Compile-time check to ensure UsearchStore implements the ports.VectorStorage interface.
 var _ ports.VectorStorage = (*UsearchStore)(nil)
 
