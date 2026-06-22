@@ -10,11 +10,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// resolveVersion returns the module version string, falling back to "dev" when
-// the binary was built without a tagged version (go run / `go build` of a
-// working tree both report "" or "(devel)"). Single source of truth for both
-// the --version flag template and the `version` subcommand.
+// version is injected at release time via -ldflags "-X main.version=<tag>"
+// (goreleaser sets this from the git tag). It stays empty for `go build` /
+// `go run`, where resolveVersion falls back to BuildInfo. A release archive is
+// built from a checkout, so BuildInfo reports "(devel)" there - the ldflag is
+// the only way the shipped binary learns its tag.
+var version string
+
+// resolveVersion returns the version string, preferring the ldflag-injected
+// release tag, then the module version from BuildInfo, falling back to "dev"
+// when neither is set. The fallback fires for `go run` (BuildInfo reports ""
+// or "(devel)"); a plain `go build` in a git tree stamps a real pseudo-version
+// instead, which is fine to surface. Single source of truth for both the
+// --version flag template and the `version` subcommand.
 func resolveVersion(info *debug.BuildInfo) string {
+	if version != "" {
+		return version
+	}
 	v := info.Main.Version
 	if v == "" || v == "(devel)" {
 		return "dev"
