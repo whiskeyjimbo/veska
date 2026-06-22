@@ -89,7 +89,7 @@ SELECT EXISTS (
     WHERE dst_node_id = ?
       AND branch      = ?
       AND repo_id     = ?
-      AND UPPER(kind) = 'CALLS'
+      AND kind        = 'CALLS'
     LIMIT 1
 )`
 	var has bool
@@ -115,7 +115,7 @@ JOIN nodes src
 WHERE e.dst_node_id = ?
   AND e.branch      = ?
   AND e.repo_id     = ?
-  AND UPPER(e.kind) = 'CALLS'`
+  AND e.kind        = 'CALLS'`
 	rows, err := r.db.QueryContext(ctx, q, nodeID, branch, repoID)
 	if err != nil {
 		return false, fmt.Errorf("sqlite.RevalidateRepo.HasTestCaller: %w", err)

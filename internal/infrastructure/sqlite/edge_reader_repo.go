@@ -53,7 +53,10 @@ func (r *EdgeReaderRepo) adjacency(ctx context.Context, repoID, branch string, n
 	}
 	kindClause := ""
 	if kind != "" {
-		kindClause = " AND UPPER(kind) = ?"
+		// Compare the column directly (it is stored upper-case by the EdgeKind
+		// enum) so idx_edges_dst's kind component is usable; the bind value is
+		// upper-cased in Go to tolerate a caller passing mixed case.
+		kindClause = " AND kind = ?"
 		args = append(args, strings.ToUpper(kind))
 	}
 	query := fmt.Sprintf(

@@ -43,7 +43,7 @@ SELECT e.src_node_id, e.dst_node_id,
 FROM edges e
 JOIN nodes sn ON sn.node_id = e.src_node_id AND sn.branch = e.branch
 JOIN nodes dn ON dn.node_id = e.dst_node_id AND dn.branch = e.branch
-WHERE e.repo_id = ? AND e.branch = ? AND UPPER(e.kind) IN (%s)`,
+WHERE e.repo_id = ? AND e.branch = ? AND e.kind IN (%s)`,
 		strings.Join(placeholders, ","))
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
