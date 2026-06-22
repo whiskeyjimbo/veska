@@ -152,6 +152,41 @@ func TestMigration0022_NodesFilePathIndexIsUsed(t *testing.T) {
 	}
 }
 
+func TestMigration0023_FindingsRuleStateIndexIsUsed(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "veska.db")
+	_ = openTest(t, dbPath)
+	raw := openRawDB(t, dbPath)
+
+	if !indexExists(t, raw, "idx_findings_repo_branch_rule_state") {
+		t.Fatal("idx_findings_repo_branch_rule_state not found after migrations")
+	}
+
+	rows, err := raw.Query(
+		`EXPLAIN QUERY PLAN
+		 SELECT finding_id FROM findings WHERE repo_id=? AND branch=? AND rule=? AND state='open'`,
+		"r1", "main", "rule1")
+	if err != nil {
+		t.Fatalf("explain query plan: %v", err)
+	}
+	defer rows.Close()
+
+	var plan strings.Builder
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatalf("scan plan row: %v", err)
+		}
+		plan.WriteString(detail)
+		plan.WriteByte('\n')
+	}
+	if !strings.Contains(plan.String(), "idx_findings_repo_branch_rule_state") {
+		t.Errorf("superseded-findings query did not use idx_findings_repo_branch_rule_state; plan:\n%s", plan.String())
+	}
+}
+
 func TestMigration0001_RecordsSchemaVersion(t *testing.T) {
 	t.Parallel()
 
