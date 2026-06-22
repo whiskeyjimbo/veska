@@ -1,0 +1,11 @@
+-- Intra/cross-package call resolution falls back to a promoted-graph lookup
+-- filtering on (repo_id, branch, symbol_path) - lookupPromotedSymbolDir, once
+-- per call that misses the in-batch symbol map. On a cold scan that fires
+-- thousands of times (every Go builtin call - len/make/append/panic - is an
+-- unqualified miss), and the existing indexes only cover (repo_id, branch):
+-- idx_nodes_symbol is symbol_path-only and the planner prefers the two-equality
+-- idx_nodes_repo_branch_file, so each lookup residual-scans every node in the
+-- repo+branch. Measured: 3,537 fallbacks * a 12.8k-row scan = ~24s of an ~83s
+-- cold scan. This three-column index lets the planner seek straight to the
+-- match (or confirm absence) in one probe - the same 3,537 lookups drop to ~3ms.
+CREATE INDEX idx_nodes_repo_branch_symbol ON nodes(repo_id, branch, symbol_path);
