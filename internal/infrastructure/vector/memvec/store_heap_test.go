@@ -52,50 +52,83 @@ func hitIDs(hits []domain.SearchHit) []string {
 // same ranked top-k as a full collect-and-sort reference, across a range of k.
 // Vectors are drawn so distances are distinct (no tie ambiguity at the cut).
 func TestSearchParityWithBruteForce(t *testing.T) {
-	const (
-		n   = 2000
-		dim = 16
-	)
-	rng := rand.New(rand.NewSource(42))
-	rows := make([]domain.EmbeddingRow, n)
-	for i := range rows {
-		v := make([]float32, dim)
-		for d := range v {
-			v[d] = rng.Float32()
-		}
-		rows[i] = domain.EmbeddingRow{
-			NodeID:      fmt.Sprintf("n%04d", i),
-			Vector:      v,
-			ContentHash: "h",
-			ModelID:     testModel,
-		}
-	}
-
-	s := memvec.New()
-	if err := s.UpsertEmbeddings(context.Background(), testRepo, testBranch, rows); err != nil {
-		t.Fatalf("UpsertEmbeddings: %v", err)
-	}
-
-	query := make([]float32, dim)
-	for d := range query {
-		query[d] = rng.Float32()
-	}
-
-	for _, k := range []int{1, 5, 10, 50, n, n + 100} {
-		want := bruteForceTopK(rows, query, k)
-		hits, err := s.Search(context.Background(), testRepo, testBranch, query, k, domain.VectorFilter{})
-		if err != nil {
-			t.Fatalf("k=%d Search: %v", k, err)
-		}
-		got := hitIDs(hits)
-		if len(got) != len(want) {
-			t.Fatalf("k=%d: got %d hits, want %d", k, len(got), len(want))
-		}
-		for i := range want {
-			if got[i] != want[i] {
-				t.Fatalf("k=%d: rank %d = %q, want %q\n got=%v\nwant=%v", k, i, got[i], want[i], got, want)
+	const dim = 16
+	// Span the parallelScanMin (2048) boundary: n=2000 exercises the in-place
+	// sequential scan, n=3000 exercises the sharded parallel scan + merge. Both
+	// must match a brute-force top-k exactly.
+	for _, n := range []int{2000, 3000} {
+		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
+			rng := rand.New(rand.NewSource(42))
+			rows := make([]domain.EmbeddingRow, n)
+			for i := range rows {
+				v := make([]float32, dim)
+				for d := range v {
+					v[d] = rng.Float32()
+				}
+				rows[i] = domain.EmbeddingRow{
+					NodeID:      fmt.Sprintf("n%04d", i),
+					Vector:      v,
+					ContentHash: "h",
+					ModelID:     testModel,
+				}
 			}
-		}
+
+			s := memvec.New()
+			if err := s.UpsertEmbeddings(context.Background(), testRepo, testBranch, rows); err != nil {
+				t.Fatalf("UpsertEmbeddings: %v", err)
+			}
+
+			query := make([]float32, dim)
+			for d := range query {
+				query[d] = rng.Float32()
+			}
+
+			// Small k: assert exact rank order against brute force, validating the
+			// parallel merge (n=3000 takes the sharded path). Seed 42 keeps the
+			// top-k distances well-separated so float32 (l2sq) vs float64 (brute
+			// force) rounding can't reorder them; deep-rank order IS precision-
+			// dependent, which is why the k>=n case below is a set-check.
+			for _, k := range []int{1, 5, 10, 50} {
+				want := bruteForceTopK(rows, query, k)
+				hits, err := s.Search(context.Background(), testRepo, testBranch, query, k, domain.VectorFilter{})
+				if err != nil {
+					t.Fatalf("k=%d Search: %v", k, err)
+				}
+				got := hitIDs(hits)
+				if len(got) != len(want) {
+					t.Fatalf("k=%d: got %d hits, want %d", k, len(got), len(want))
+				}
+				for i := range want {
+					if got[i] != want[i] {
+						t.Fatalf("k=%d: rank %d = %q, want %q\n got=%v\nwant=%v", k, i, got[i], want[i], got, want)
+					}
+				}
+			}
+
+			// Full corpus (k >= n): exact deep-rank order is dominated by
+			// float32 (l2sq) vs float64 (brute force) rounding on near-equal
+			// distances, so assert the returned SET is complete and the scores
+			// are non-increasing rather than a brittle position-by-position match.
+			for _, k := range []int{n, n + 100} {
+				hits, err := s.Search(context.Background(), testRepo, testBranch, query, k, domain.VectorFilter{})
+				if err != nil {
+					t.Fatalf("k=%d Search: %v", k, err)
+				}
+				if len(hits) != n {
+					t.Fatalf("k=%d: got %d hits, want all %d rows", k, len(hits), n)
+				}
+				seen := make(map[string]bool, n)
+				for i, h := range hits {
+					seen[h.NodeID] = true
+					if i > 0 && hits[i].Score > hits[i-1].Score {
+						t.Fatalf("k=%d: scores not non-increasing at rank %d (%.6f > %.6f)", k, i, hits[i].Score, hits[i-1].Score)
+					}
+				}
+				if len(seen) != n {
+					t.Fatalf("k=%d: returned %d distinct nodes, want %d (set incomplete)", k, len(seen), n)
+				}
+			}
+		})
 	}
 }
 
@@ -175,13 +208,26 @@ func TestSearchAllocsIndependentOfN(t *testing.T) {
 		})
 	}
 
-	small := measure(500)
-	big := measure(50_000)
-	// O(k) means big must not allocate more than small (allow no growth with N).
-	if big > small {
-		t.Fatalf("allocs grew with corpus size: N=500 -> %.0f allocs, N=50000 -> %.0f allocs", small, big)
-	}
-	t.Logf("allocs/op: N=500 -> %.0f, N=50000 -> %.0f (k=%d)", small, big, k)
+	// Allocs must be O(k), not O(N) - flat as the corpus grows. The scan has two
+	// regimes split at parallelScanMin (2048): below it the partition maps are
+	// scanned in place; above it the rows are materialized once and the scan is
+	// sharded across workers, adding a constant (in N) baseline of goroutine +
+	// per-shard-heap allocations. The baselines differ, so independence-of-N is
+	// asserted WITHIN each regime rather than across the threshold.
+	t.Run("sequential", func(t *testing.T) {
+		small, big := measure(300), measure(1800) // both < 2048
+		if big > small {
+			t.Fatalf("sequential allocs grew with N: 300 -> %.0f, 1800 -> %.0f", small, big)
+		}
+		t.Logf("sequential allocs/op: N=300 -> %.0f, N=1800 -> %.0f (k=%d)", small, big, k)
+	})
+	t.Run("parallel", func(t *testing.T) {
+		small, big := measure(4000), measure(50_000) // both >= 2048
+		if big > small {
+			t.Fatalf("parallel allocs grew with N: 4000 -> %.0f, 50000 -> %.0f", small, big)
+		}
+		t.Logf("parallel allocs/op: N=4000 -> %.0f, N=50000 -> %.0f (k=%d)", small, big, k)
+	})
 }
 
 // BenchmarkSearch exercises the hot path at a realistic corpus size.

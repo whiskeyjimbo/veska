@@ -12,6 +12,7 @@ package memvec
 
 import (
 	"context"
+	"runtime"
 	"sync"
 
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
@@ -108,6 +109,13 @@ type candidate struct {
 // whole set: allocation is O(k) per query instead of O(N), and there is no
 // full-partition sort. l2sq is still evaluated once per stored vector - the scan
 // itself is inherently linear for this backend.
+// parallelScanMin is the row count above which Search shards the linear scan
+// across GOMAXPROCS workers. Below it the goroutine + merge overhead outweighs
+// the win, so a single-threaded scan is used. This brute-force scan is the hot
+// path for autolink (thousands of searches per cold scan) and large-repo
+// semantic search; the result is identical either way - only the work is split.
+const parallelScanMin = 2048
+
 func (s *Store) Search(_ context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -116,38 +124,17 @@ func (s *Store) Search(_ context.Context, repoID, branch string, vec []float32, 
 		return nil, nil
 	}
 
-	// Max-heap of the k closest candidates seen so far. A new candidate enters
-	// only when it is closer than the current farthest kept (the root).
-	h := make([]candidate, 0, k)
-	consider := func(nodeID string, d float32) {
-		if len(h) < k {
-			h = append(h, candidate{nodeID: nodeID, dist: d})
-			siftUp(h, len(h)-1)
-			return
-		}
-		if d < h[0].dist {
-			h[0] = candidate{nodeID: nodeID, dist: d}
-			siftDown(h, 0)
-		}
-	}
-
-	scan := func(p map[string]*row) {
-		for _, r := range p {
-			consider(r.nodeID, l2sq(r.vector, vec))
-		}
-	}
-
-	if filter.ModelID != "" {
-		k2 := storeKey{repoID: repoID, branch: branch, modelID: filter.ModelID}
-		if p, ok := s.partitions[k2]; ok {
-			scan(p)
-		}
+	// Small corpora scan the partition maps in place (no per-query allocation,
+	// the original O(k) behavior). Large corpora materialize the rows once and
+	// shard the scan across workers - the materialization + goroutines add a
+	// constant (in N) allocation overhead, paid only where the parallel win
+	// dwarfs it.
+	total := s.countRows(repoID, branch, filter)
+	var h []candidate
+	if total < parallelScanMin || runtime.GOMAXPROCS(0) < 2 {
+		h = s.scanSequential(repoID, branch, filter, vec, k)
 	} else {
-		for k2, p := range s.partitions {
-			if k2.repoID == repoID && k2.branch == branch {
-				scan(p)
-			}
-		}
+		h = topKClosest(s.gatherRows(repoID, branch, filter, total), vec, k)
 	}
 
 	// Drain the heap farthest-first, filling the result back-to-front so it ends
@@ -167,6 +154,131 @@ func (s *Store) Search(_ context.Context, repoID, branch string, vec []float32, 
 		}
 	}
 	return hits, nil
+}
+
+// forEachPartition calls fn for every partition map matching (repoID, branch)
+// and the optional modelID filter. Centralizes the partition-selection logic
+// shared by countRows, scanSequential, and gatherRows. Called under the read lock.
+func (s *Store) forEachPartition(repoID, branch string, filter domain.VectorFilter, fn func(map[string]*row)) {
+	if filter.ModelID != "" {
+		if p, ok := s.partitions[storeKey{repoID: repoID, branch: branch, modelID: filter.ModelID}]; ok {
+			fn(p)
+		}
+		return
+	}
+	for k2, p := range s.partitions {
+		if k2.repoID == repoID && k2.branch == branch {
+			fn(p)
+		}
+	}
+}
+
+// countRows totals the rows the query will scan, so gatherRows can pre-size its
+// slice to a single allocation (and Search can pick the sequential vs parallel path).
+func (s *Store) countRows(repoID, branch string, filter domain.VectorFilter) int {
+	n := 0
+	s.forEachPartition(repoID, branch, filter, func(p map[string]*row) { n += len(p) })
+	return n
+}
+
+// scanSequential builds the top-k max-heap by scanning the partition maps in
+// place - no row slice is materialized, so allocation stays O(k).
+func (s *Store) scanSequential(repoID, branch string, filter domain.VectorFilter, vec []float32, k int) []candidate {
+	h := make([]candidate, 0, k)
+	s.forEachPartition(repoID, branch, filter, func(p map[string]*row) {
+		for _, r := range p {
+			d := l2sq(r.vector, vec)
+			if len(h) < k {
+				h = append(h, candidate{nodeID: r.nodeID, dist: d})
+				siftUp(h, len(h)-1)
+				continue
+			}
+			if d < h[0].dist {
+				h[0] = candidate{nodeID: r.nodeID, dist: d}
+				siftDown(h, 0)
+			}
+		}
+	})
+	return h
+}
+
+// gatherRows materializes the matching rows into one pre-sized slice the
+// parallel scan can shard. total comes from countRows so the backing array is a
+// single allocation regardless of N.
+func (s *Store) gatherRows(repoID, branch string, filter domain.VectorFilter, total int) []*row {
+	rows := make([]*row, 0, total)
+	s.forEachPartition(repoID, branch, filter, func(p map[string]*row) {
+		for _, r := range p {
+			rows = append(rows, r)
+		}
+	})
+	return rows
+}
+
+// scanHeap builds a max-heap of the k closest rows to vec - h[0] is the
+// farthest kept, so a new candidate enters only when it beats the root.
+func scanHeap(rows []*row, vec []float32, k int) []candidate {
+	h := make([]candidate, 0, k)
+	for _, r := range rows {
+		d := l2sq(r.vector, vec)
+		if len(h) < k {
+			h = append(h, candidate{nodeID: r.nodeID, dist: d})
+			siftUp(h, len(h)-1)
+			continue
+		}
+		if d < h[0].dist {
+			h[0] = candidate{nodeID: r.nodeID, dist: d}
+			siftDown(h, 0)
+		}
+	}
+	return h
+}
+
+// topKClosest returns the k closest rows as a max-heap. For large corpora it
+// shards the scan across workers and merges the per-shard heaps; the merged
+// top-k set is identical to a single-threaded scan (ties at the k-th distance
+// are as order-dependent as they already were).
+func topKClosest(rows []*row, vec []float32, k int) []candidate {
+	workers := runtime.GOMAXPROCS(0)
+	if workers < 2 || len(rows) < parallelScanMin {
+		return scanHeap(rows, vec, k)
+	}
+
+	shardSize := (len(rows) + workers - 1) / workers
+	locals := make([][]candidate, 0, workers)
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	for lo := 0; lo < len(rows); lo += shardSize {
+		hi := min(lo+shardSize, len(rows))
+		wg.Add(1)
+		go func(shard []*row) {
+			defer wg.Done()
+			lh := scanHeap(shard, vec, k)
+			mu.Lock()
+			locals = append(locals, lh)
+			mu.Unlock()
+		}(rows[lo:hi])
+	}
+	wg.Wait()
+
+	// Merge the per-shard heaps into one top-k max-heap.
+	merged := make([]candidate, 0, k)
+	for _, lh := range locals {
+		for _, c := range lh {
+			if len(merged) < k {
+				merged = append(merged, c)
+				siftUp(merged, len(merged)-1)
+				continue
+			}
+			if c.dist < merged[0].dist {
+				merged[0] = c
+				siftDown(merged, 0)
+			}
+		}
+	}
+	return merged
 }
 
 // siftUp restores the max-heap property after appending at index i.
