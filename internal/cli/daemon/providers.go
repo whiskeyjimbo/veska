@@ -280,6 +280,17 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 		return nil, fmt.Errorf("query pending embeds: %w", err)
 	}
 
+	// pending_fts: files whose lexical index the async FTS lane hasn't rebuilt
+	// yet. Non-zero mostly right after a cold scan; lexical search is partial
+	// until it drains. Mirrors pending_embeds as a cold-start signal.
+	var pendingFTS int
+	if err := sp.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM post_promotion_queue
+		 WHERE work_kind = 'fts' AND state IN ('pending','in_progress')`,
+	).Scan(&pendingFTS); err != nil {
+		return nil, fmt.Errorf("query pending fts: %w", err)
+	}
+
 	// scans_in_flight: snapshot of cold scans the reparser is currently
 	// running, populated via 's ScanTracker. Empty slice when
 	// nothing is running OR when no tracker is wired (test / legacy
@@ -298,12 +309,17 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 		reasons = append(reasons, mcp.DegradedReasonEmbeddingsPending)
 		rollup = "degraded"
 	}
+	if pendingFTS > 0 {
+		reasons = append(reasons, mcp.DegradedReasonFTSPending)
+		rollup = "degraded"
+	}
 
 	return map[string]any{
 		"status":           rollup,
 		"schema_version":   int(ver.Int64), // NULL -> 0
 		"repo_count":       repoCount,
 		"pending_embeds":   pendingEmbeds,
+		"pending_fts":      pendingFTS,
 		"scans_in_flight":  scansInFlight,
 		"degraded_reasons": reasons,
 	}, nil

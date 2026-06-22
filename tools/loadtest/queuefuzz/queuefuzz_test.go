@@ -74,10 +74,11 @@ func TestQueueFuzz(t *testing.T) {
 		ports.WorkKindEmbed:      stub,
 		ports.WorkKindAutoLink:   stub,
 		ports.WorkKindRevalidate: stub,
-		// Promote also enqueues one wiki row per promotion. Without a handler
-		// for it those rows stay 'pending' forever and waitDrain (which counts
-		// every kind) never reaches zero - so register a stub here too.
+		// Promote also enqueues one wiki row per promotion and one fts row per
+		// file. Without handlers for them those rows stay 'pending' forever and
+		// waitDrain (which counts every kind) never reaches zero - stub them.
 		ports.WorkKindWiki: stub,
+		ports.WorkKindFTS:  stub,
 	}
 
 	// Tight poll interval keeps the fuzz responsive without hammering the

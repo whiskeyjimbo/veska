@@ -18,6 +18,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/autolink"
 	"github.com/whiskeyjimbo/veska/internal/application/checks"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
+	"github.com/whiskeyjimbo/veska/internal/application/fts"
 	"github.com/whiskeyjimbo/veska/internal/application/revalidate"
 	"github.com/whiskeyjimbo/veska/internal/application/review"
 	"github.com/whiskeyjimbo/veska/internal/application/savings"
@@ -416,10 +417,15 @@ func (b *daemonBuilder) buildQueueHandlers() error {
 	if err != nil {
 		return err
 	}
+	ftsH, err := fts.NewHandler(sqlite.NewFTSReindexRepo(b.pools.Write))
+	if err != nil {
+		return fmt.Errorf("fts handler: %w", err)
+	}
 	b.handlers = map[queue.WorkKind]queue.WorkHandler{
 		ports.WorkKindAutoLink:   autoH,
 		ports.WorkKindRevalidate: revalH,
 		ports.WorkKindWiki:       wikiH,
+		ports.WorkKindFTS:        ftsH,
 		ports.WorkKindEmbed:      noopEmbedHandler{}, // drained by embed worker
 	}
 	if b.fileCfg.Review.Enabled {

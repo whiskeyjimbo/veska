@@ -283,7 +283,8 @@ func (w *mcpToolWiring) registerSearchTool() error {
 	mcp.RegisterSearchTools(w.r, searchSvc, w.d.refs, w.d.vectors, w.nodes, w.d.savings, w.repos(),
 		mcp.WithSearchGraph(w.graph),
 		mcp.WithSearchScanTracker(w.d.scanTracker),
-		mcp.WithSearchReconcileTracker(w.reconcileReader()))
+		mcp.WithSearchReconcileTracker(w.reconcileReader()),
+		mcp.WithSearchFTSPending(sqlite.NewFTSPendingCounter(w.pools.ReadDB)))
 	return nil
 }
 
