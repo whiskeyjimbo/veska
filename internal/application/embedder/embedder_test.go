@@ -769,6 +769,36 @@ func TestWorker_GaugeTracksPending(t *testing.T) {
 	w.Wait()
 }
 
+// TestWorker_GaugeTracksConcurrencyLimit verifies the worker publishes the
+// governor's limit so the calibration is observable (solov2-fi42 AC).
+func TestWorker_GaugeTracksConcurrencyLimit(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+	seedNode(t, db, "n1", "r1", "main", "S", "function")
+
+	reg := prometheus.NewRegistry()
+	metrics := observability.NewMetrics(reg)
+	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
+	vs := &fakeVectorStore{}
+
+	w := mustNewWorker(t, repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithMetrics(metrics),
+		embedder.WithGovernor(embedder.NewFixedGovernor(4)),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	if !waitForCondition(t, 2*time.Second, func() bool {
+		return readGauge(metrics.EmbedConcurrencyLimit) == 4
+	}) {
+		t.Fatalf("concurrency-limit gauge never reached 4; current=%v", readGauge(metrics.EmbedConcurrencyLimit))
+	}
+	cancel()
+	w.Wait()
+}
+
 type blockingEmbedder struct {
 	block   chan struct{}
 	modelID string
@@ -790,13 +820,49 @@ func readGauge(g prometheus.Gauge) float64 {
 	return testutil.ToFloat64(g)
 }
 
-// TestWorker_RateLimitThrottlesEmbedCalls verifies that WithRatePerSec(r)
-// installs a token-bucket limiter that gates each Embed call. With r=5 and
-// >=N pending rows, the wall time to issue N Embed calls must be at least
-// roughly (N-1)/r seconds. We use a coarse lower bound to avoid flakiness:
-// a bucket of size 1 means the first call goes through immediately and the
-// remaining (N-1) calls each wait ~1/r seconds.
-func TestWorker_RateLimitThrottlesEmbedCalls(t *testing.T) {
+// TestWorker_GreedyDrainBeatsInterval is the throughput regression test for
+// solov2-fi42. The interval is the IDLE cadence only: a backlog larger than a
+// batch must drain in back-to-back passes, NOT one batch per interval. With a
+// 60s interval and 5 full batches of backlog, the prior one-batch-per-tick
+// loop would have needed ~5 intervals (~5 minutes); the greedy drain finishes
+// in one burst well under a single interval.
+func TestWorker_GreedyDrainBeatsInterval(t *testing.T) {
+	db := openSchemaDB(t)
+	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
+
+	const n = 50
+	for i := range n {
+		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
+	}
+
+	emb := &fakeEmbedder{vector: []float32{1, 2, 3}, modelID: "m"}
+	vs := &fakeVectorStore{}
+
+	w := mustNewWorker(t, repo, emb, vs,
+		embedder.WithInterval(60*time.Second), // long idle cadence; must not gate the drain
+		embedder.WithBatchSize(10),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+
+	// All n must embed within a window far shorter than one interval - that is
+	// only possible if passes run back-to-back rather than once per interval.
+	if !waitForCondition(t, 3*time.Second, func() bool {
+		return emb.calls.Load() >= int64(n)
+	}) {
+		t.Fatalf("greedy drain stalled: only %d/%d Embed calls in 3s (interval=60s)", emb.calls.Load(), n)
+	}
+	cancel()
+	w.Wait()
+}
+
+// TestWorker_GovernorEnablesConcurrentEmbedding proves the fan-out wiring: a
+// governor limit > 1 lets multiple batches embed at once. With limit 3 and
+// three batches collected per pass, the probe must observe >= 2 in-flight
+// Embed calls simultaneously - impossible under the prior serial loop.
+func TestWorker_GovernorEnablesConcurrentEmbedding(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
 
@@ -805,122 +871,65 @@ func TestWorker_RateLimitThrottlesEmbedCalls(t *testing.T) {
 		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
 	}
 
-	emb := &fakeEmbedder{vector: []float32{1, 2, 3}, modelID: "m"}
+	probe := &concurrencyProbe{modelID: "m", vector: []float32{1}, target: 2, gate: make(chan struct{})}
 	vs := &fakeVectorStore{}
 
-	const rps = 5.0
-	w := mustNewWorker(t, repo, emb, vs,
-		embedder.WithInterval(5*time.Millisecond),
-		embedder.WithRatePerSec(rps),
-		embedder.WithBatchSize(n),
+	w := mustNewWorker(t, repo, probe, vs,
+		embedder.WithInterval(60*time.Second),
+		embedder.WithBatchSize(2),
+		embedder.WithGovernor(embedder.NewFixedGovernor(3)),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	start := time.Now()
 	w.Start(ctx)
 
-	ok := waitForCondition(t, 5*time.Second, func() bool {
-		return emb.calls.Load() >= int64(n)
-	})
-	elapsed := time.Since(start)
-	cancel()
-	w.Wait()
-
-	if !ok {
-		t.Fatalf("only %d Embed calls observed; want >=%d", emb.calls.Load(), n)
-	}
-
-	// Lower bound: bucket size is 1, so (n-1) tokens are awaited at 1/r each.
-	// Allow a generous fudge - assert >= 60% of theoretical minimum.
-	minWant := time.Duration(float64(n-1) / rps * float64(time.Second) * 0.6)
-	if elapsed < minWant {
-		t.Fatalf("rate limiter did not throttle: elapsed=%s want>=%s (n=%d, rps=%v)", elapsed, minWant, n, rps)
-	}
-}
-
-// TestWorker_RateLimitCtxCancelUnwinds verifies that canceling the ctx
-// while a goroutine is blocked inside limiter.Wait returns cleanly and the
-// worker shuts down promptly.
-func TestWorker_RateLimitCtxCancelUnwinds(t *testing.T) {
-	db := openSchemaDB(t)
-	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
-
-	// Seed many nodes so the limiter must wait between calls.
-	for i := range 20 {
-		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
-	}
-
-	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
-	vs := &fakeVectorStore{}
-
-	// Very slow rate - guarantees the worker is parked in limiter.Wait.
-	w := mustNewWorker(t, repo, emb, vs,
-		embedder.WithInterval(5*time.Millisecond),
-		embedder.WithRatePerSec(0.5), // 1 call per 2 seconds
-		embedder.WithBatchSize(20),
-	)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	w.Start(ctx)
-
-	// Let the worker drain one ref and then sit in Wait for the next token.
-	time.Sleep(100 * time.Millisecond)
-	start := time.Now()
-	cancel()
-
-	exited := make(chan struct{})
-	go func() { w.Wait(); close(exited) }()
-	select {
-	case <-exited:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatalf("worker did not exit promptly after ctx cancel; elapsed=%s", time.Since(start))
-	}
-}
-
-// TestWorker_RateLimitZeroMeansUnlimited verifies that WithRatePerSec(0)
-// disables the limiter entirely (no gating). We assert by issuing many
-// calls and observing they complete much faster than even a generous
-// default rate would allow.
-func TestWorker_RateLimitZeroMeansUnlimited(t *testing.T) {
-	db := openSchemaDB(t)
-	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
-
-	const n = 20
-	for i := range n {
-		seedNode(t, db, "n"+string(rune('a'+i)), "r1", "main", "S"+string(rune('a'+i)), "function")
-	}
-
-	emb := &fakeEmbedder{vector: []float32{1}, modelID: "m"}
-	vs := &fakeVectorStore{}
-
-	w := mustNewWorker(t, repo, emb, vs,
-		embedder.WithInterval(5*time.Millisecond),
-		embedder.WithRatePerSec(0), // unlimited
-		embedder.WithBatchSize(n),
-	)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	start := time.Now()
-	w.Start(ctx)
-
-	if !waitForCondition(t, 2*time.Second, func() bool {
-		return emb.calls.Load() >= int64(n)
+	if !waitForCondition(t, 3*time.Second, func() bool {
+		return probe.maxSeen.Load() >= probe.target
 	}) {
-		t.Fatalf("only %d Embed calls observed; want >=%d", emb.calls.Load(), n)
+		t.Fatalf("expected >= %d concurrent Embed calls, saw max %d", probe.target, probe.maxSeen.Load())
 	}
-	elapsed := time.Since(start)
 	cancel()
 	w.Wait()
-
-	// At default 10/s, 20 calls would take ~1.9s. Unlimited should be well
-	// under 500ms even with SQLite and scheduling jitter.
-	if elapsed > 500*time.Millisecond {
-		t.Fatalf("WithRatePerSec(0) should be unlimited; elapsed=%s", elapsed)
-	}
 }
+
+// concurrencyProbe records the peak number of simultaneous Embed calls. Each
+// call releases the others once `target` are in flight, so the worker only
+// makes progress when the governor truly runs them concurrently; a safety
+// timeout keeps a misconfigured test from hanging.
+type concurrencyProbe struct {
+	modelID  string
+	vector   []float32
+	target   int32
+	gate     chan struct{}
+	gateOnce sync.Once
+	inflight atomic.Int32
+	maxSeen  atomic.Int32
+}
+
+func (p *concurrencyProbe) Embed(ctx context.Context, _ string) ([]float32, error) {
+	n := p.inflight.Add(1)
+	defer p.inflight.Add(-1)
+	for {
+		m := p.maxSeen.Load()
+		if n <= m || p.maxSeen.CompareAndSwap(m, n) {
+			break
+		}
+	}
+	if n >= p.target {
+		p.gateOnce.Do(func() { close(p.gate) })
+	}
+	select {
+	case <-p.gate:
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+	}
+	out := make([]float32, len(p.vector))
+	copy(out, p.vector)
+	return out, nil
+}
+
+func (p *concurrencyProbe) ModelID() string { return p.modelID }
 
 // alwaysErrEmbedder always returns an error for the given target text;
 // other texts succeed. Used to drive the retry counter without affecting

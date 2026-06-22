@@ -343,15 +343,12 @@ func (b *daemonBuilder) buildEmbedder() error {
 		return err
 	}
 	b.refs = sqlite.NewEmbeddingRefsRepo(b.pools.ReadDB, b.pools.Write)
-	// The rate limit (Embedder.RatePerSec, default 10/s) smooths load on the
-	// Ollama network branch. Local embedders (model2vec/static) do thousands/s,
-	// so it would throttle backfill to ~10/s - disable it unless Ollama elected.
-	rate := 0.0
-	if b.embedderIsOllama {
-		rate = b.fileCfg.Embedder.RatePerSec
-	}
+	// Throughput is bounded by the greedy drain + Governor, not a fixed rate.
+	// The default governor (fixed concurrency 1) suits a single local Ollama
+	// instance and local embedders alike: both serialize internally, so 1 is
+	// the ceiling and the greedy drain reaches it. Hosted-API providers will
+	// elect an adaptive governor here once they land (solov2-fi42).
 	worker, err := embedder.NewWorker(b.refs, b.provider, b.vec,
-		embedder.WithRatePerSec(rate),
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
 		embedder.WithMetrics(b.metrics),
 		embedder.WithPauser(b.ingestionBusy),

@@ -148,13 +148,14 @@ large_file_threshold_loc = 1500              # files above this reparse on a bac
 # `provider` is currently not consumed for selection - it is retained
 # for the planned config-driven override. `endpoint`/`model` apply when
 # the Ollama path is elected (env vars VESKA_OLLAMA_URL / VESKA_EMBED_MODEL
-# override them); `rate_per_sec` and `batch_size` are live today.
+# override them). Embedder throughput is governed by the worker's greedy
+# drain + concurrency Governor (solov2-fi42), not a config rate; a legacy
+# `rate_per_sec` key is silently ignored for back-compat.
 [embedder]
 provider               = "ollama"            # not consumed for election; see note above
 endpoint               = "http://localhost:11434"
 model                  = "nomic-embed-text"
 dim                    = 768
-rate_per_sec           = 10
 batch_size             = 32
 
 # ─── llm generator (review pipeline; off by default) ─────────
