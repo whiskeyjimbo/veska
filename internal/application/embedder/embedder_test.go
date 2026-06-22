@@ -212,7 +212,7 @@ func waitForCondition(t *testing.T, timeout time.Duration, cond func() bool) boo
 // returns an error. Used by the many happy-path tests that pass non-nil deps.
 func mustNewWorker(
 	t *testing.T,
-	refs ports.EmbeddingRefRepo,
+	refs embedder.EmbedRefQueue,
 	emb ports.EmbeddingProvider,
 	vectors ports.VectorStorage,
 	opts ...embedder.Option,
@@ -233,7 +233,7 @@ func TestNewWorker_NilDependencyReturnsTypedError(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		refs     ports.EmbeddingRefRepo
+		refs     embedder.EmbedRefQueue
 		embedder ports.EmbeddingProvider
 		vectors  ports.VectorStorage
 	}{
