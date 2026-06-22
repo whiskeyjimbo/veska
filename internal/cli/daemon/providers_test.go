@@ -73,6 +73,12 @@ func providersTestDB(t *testing.T) *sql.DB {
 			migration_sha TEXT,
 			applied_by    TEXT
 		)`,
+		// post_promotion_queue is needed by the status pending-fts count.
+		`CREATE TABLE post_promotion_queue (
+			seq       INTEGER PRIMARY KEY AUTOINCREMENT,
+			work_kind TEXT NOT NULL,
+			state     TEXT NOT NULL
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

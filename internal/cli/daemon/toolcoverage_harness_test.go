@@ -127,6 +127,7 @@ func newHarness(t *testing.T, opts ...HarnessOption) *toolHarness {
 		h.indexRepo(reparser, fr)
 	}
 	h.drainEmbeddings(provider, vectors)
+	h.drainFTS()
 	h.seedOperationalState()
 
 	h.reg = mcp.NewRegistry()
@@ -236,6 +237,48 @@ func (h *toolHarness) drainEmbeddings(provider ports.EmbeddingProvider, vectors 
 	defer worker.Stop()
 	if err := waitHarnessPendingDrained(ctx, refs); err != nil {
 		h.t.Fatalf("harness: embedder drain timed out: %v", err)
+	}
+}
+
+// drainFTS processes the async FTS lane the same way the daemon's poller would:
+// it reindexes each pending fts row's file and marks the row done, so lexical
+// search is populated and eng_get_status reports pending_fts=0. Mirrors
+// drainEmbeddings - the harness completes background work inline rather than
+// relying on a live poller.
+func (h *toolHarness) drainFTS() {
+	h.t.Helper()
+	ctx := context.Background()
+	repo := sqlite.NewFTSReindexRepo(h.pools.Write)
+	rows, err := h.pools.ReadDB.QueryContext(ctx,
+		`SELECT seq, repo_id, branch, payload FROM post_promotion_queue
+		   WHERE work_kind = 'fts' AND state IN ('pending','in_progress')`)
+	if err != nil {
+		h.t.Fatalf("harness: query pending fts: %v", err)
+	}
+	type job struct {
+		seq                  int64
+		repoID, branch, path string
+	}
+	var jobs []job
+	for rows.Next() {
+		var j job
+		if err := rows.Scan(&j.seq, &j.repoID, &j.branch, &j.path); err != nil {
+			_ = rows.Close()
+			h.t.Fatalf("harness: scan fts row: %v", err)
+		}
+		jobs = append(jobs, j)
+	}
+	_ = rows.Close()
+	for _, j := range jobs {
+		if j.path != "" {
+			if err := repo.ReindexFile(ctx, j.repoID, j.branch, j.path); err != nil {
+				h.t.Fatalf("harness: fts reindex %q: %v", j.path, err)
+			}
+		}
+		if _, err := h.pools.Write.ExecContext(ctx,
+			`UPDATE post_promotion_queue SET state='done' WHERE seq = ?`, j.seq); err != nil {
+			h.t.Fatalf("harness: mark fts done: %v", err)
+		}
 	}
 }
 

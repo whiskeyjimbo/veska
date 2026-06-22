@@ -195,8 +195,8 @@ func TestPromote_TwoFiles(t *testing.T) {
 	if got := countNodes(t, db); got != 2 {
 		t.Errorf("nodes: want 2, got %d", got)
 	}
-	if got := countQueue(t, db); got != 7 {
-		t.Errorf("queue rows: want 7 (3 work_kinds × 2 files + 1 wiki), got %d", got)
+	if got := countQueue(t, db); got != 9 {
+		t.Errorf("queue rows: want 9 (4 work_kinds × 2 files + 1 wiki), got %d", got)
 	}
 
 	// Staging must be cleared after promotion.
@@ -252,9 +252,9 @@ func TestPromote_Idempotent(t *testing.T) {
 	if got := countNodes(t, db); got != 1 {
 		t.Errorf("nodes after idempotent promote: want 1, got %d", got)
 	}
-	// Queue must have (3 work_kinds + 1 wiki) rows per promote call = 8 total.
-	if got := countQueue(t, db); got != 8 {
-		t.Errorf("queue rows after 2 promotes: want 8, got %d", got)
+	// Queue must have (4 work_kinds + 1 wiki) rows per promote call = 10 total.
+	if got := countQueue(t, db); got != 10 {
+		t.Errorf("queue rows after 2 promotes: want 10, got %d", got)
 	}
 }
 
@@ -383,10 +383,12 @@ func TestPromoteRegisteredRepo(t *testing.T) {
 	}
 }
 
-// TestPromote_WritesFTS verifies that promoting a node lands rows in
-// both node_fts_words and node_fts_trigrams within the same transaction,
-// using the camelCase-split pre-tokenization contract from m3.03.2.
-func TestPromote_WritesFTS(t *testing.T) {
+// TestFTSReindex_WritesRows verifies that the async FTS reindex (the
+// WorkKindFTS lane, no longer the promote tx) lands rows in both
+// node_fts_words and node_fts_trigrams, using the camelCase-split
+// pre-tokenization contract from m3.03.2. Promotion only enqueues the work
+// now; ReindexFile builds the rows from the promoted nodes.
+func TestFTSReindex_WritesRows(t *testing.T) {
 	db := openMemDB(t)
 	insertTestRepo(t, db, "repo-fts")
 
@@ -399,6 +401,11 @@ func TestPromote_WritesFTS(t *testing.T) {
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote: %v", err)
+	}
+	// Promotion no longer writes FTS rows synchronously - it enqueues a fts
+	// row that this drains.
+	if err := sqlite.NewFTSReindexRepo(db).ReindexFile(context.Background(), "repo-fts", "main", "src/api.go"); err != nil {
+		t.Fatalf("ReindexFile: %v", err)
 	}
 
 	var c int
@@ -451,17 +458,29 @@ func TestPromote_FTS_RemovesStaleRowsOnReParse(t *testing.T) {
 	b, _ := domain.NewNode(domain.NodeSpec{ID: "b", Path: "f.go", Name: "openFinding", Kind: domain.KindFunction})
 	sa.Stage("repo-fts", "main", "f.go", staging.File{Nodes: []*domain.Node{a, b}, Edges: nil})
 
+	reindex := func(sha string) {
+		t.Helper()
+		if err := sqlite.NewFTSReindexRepo(db).ReindexFile(context.Background(), "repo-fts", "main", "f.go"); err != nil {
+			t.Fatalf("ReindexFile after %s: %v", sha, err)
+		}
+	}
+
 	p := newTestPromoter(sa, db)
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha-1", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 1: %v", err)
 	}
+	reindex("sha-1") // FTS now has a + b
 
-	// Re-promote with only one of the two nodes.
+	// Re-promote with only one of the two nodes. The promote tx's synchronous
+	// BeforeNodeDelete clears b's stale FTS row while b still exists in nodes;
+	// the async reindex below can only see the surviving node (a), so without
+	// that synchronous cleanup b would stay searchable forever.
 	a2, _ := domain.NewNode(domain.NodeSpec{ID: "a", Path: "f.go", Name: "closeFinding", Kind: domain.KindFunction})
 	sa.Stage("repo-fts", "main", "f.go", staging.File{Nodes: []*domain.Node{a2}, Edges: nil})
 	if err := p.Promote(context.Background(), "repo-fts", "main", "sha-2", domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}); err != nil {
 		t.Fatalf("Promote 2: %v", err)
 	}
+	reindex("sha-2") // FTS should now have only a
 
 	var c int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM node_fts_words`).Scan(&c); err != nil {
@@ -499,11 +518,11 @@ func TestPromote_AtomicTransaction(t *testing.T) {
 		t.Fatalf("Promote: %v", err)
 	}
 
-	// 5 nodes, 3 work_kinds × 1 file + 1 wiki = 4 queue rows.
+	// 5 nodes, 4 work_kinds × 1 file + 1 wiki = 5 queue rows.
 	if got := countNodes(t, db); got != 5 {
 		t.Errorf("nodes: want 5, got %d", got)
 	}
-	if got := countQueue(t, db); got != 4 {
-		t.Errorf("queue rows: want 4 (1 file × 3 work_kinds + 1 wiki), got %d", got)
+	if got := countQueue(t, db); got != 5 {
+		t.Errorf("queue rows: want 5 (1 file × 4 work_kinds + 1 wiki), got %d", got)
 	}
 }

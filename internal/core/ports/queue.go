@@ -15,6 +15,13 @@ const (
 	WorkKindReview     WorkKind = "review"
 	WorkKindWiki       WorkKind = "wiki"
 	WorkKindSummary    WorkKind = "summary"
+	// WorkKindFTS rebuilds a file's full-text-search rows asynchronously after
+	// promotion. The expensive FTS5 inserts used to run co-transactionally in
+	// the promote tx (~42s of an 844-file cold scan); deferring them keeps the
+	// promote critical path short. Orphan cleanup for deleted/renamed symbols
+	// still happens synchronously in ftsSink.BeforeNodeDelete, while the old
+	// node rows are still present to identify them.
+	WorkKindFTS WorkKind = "fts"
 )
 
 type WorkRow struct {
