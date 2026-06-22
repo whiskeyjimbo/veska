@@ -56,9 +56,6 @@ func (s *stubVectors) Search(_ context.Context, _, _ string, vec []float32, k in
 }
 
 func (s *stubVectors) DeleteNodes(context.Context, string, string, []string) error { return nil }
-func (s *stubVectors) Reindex(_ context.Context, _, _ string) error {
-	return nil
-}
 
 func (s *stubVectors) LookupContentHashes(_ context.Context, _, _ string, _ []string) (map[string]string, error) {
 	return nil, nil

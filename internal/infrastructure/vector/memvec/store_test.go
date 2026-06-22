@@ -184,14 +184,6 @@ func TestSearchFilterByModel(t *testing.T) {
 	}
 }
 
-// TestReindexNoOp verifies that Reindex returns a nil error on this backend.
-func TestReindexNoOp(t *testing.T) {
-	s := memvec.New()
-	if err := s.Reindex(context.Background(), testRepo, testModel); err != nil {
-		t.Errorf("Reindex: expected nil, got %v", err)
-	}
-}
-
 // TestLookupContentHashes verifies that LookupContentHashes returns content hashes for existing node identifiers.
 func TestLookupContentHashes(t *testing.T) {
 	s := memvec.New()

@@ -173,16 +173,6 @@ func TestFilterModelID(t *testing.T) {
 	}
 }
 
-// TestReindex verifies that calling Reindex on UsearchStore returns a nil error.
-func TestReindex(t *testing.T) {
-	ctx := context.Background()
-	store := newStore(t)
-
-	if err := store.Reindex(ctx, "repo-1", "nomic-embed-text"); err != nil {
-		t.Errorf("Reindex: expected nil, got %v", err)
-	}
-}
-
 // TestUpsertUpdatesExistingNode verifies that inserting a row with a pre-existing node identifier replaces the existing row metadata and vector.
 func TestUpsertUpdatesExistingNode(t *testing.T) {
 	ctx := context.Background()
