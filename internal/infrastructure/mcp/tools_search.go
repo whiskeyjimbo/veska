@@ -30,8 +30,18 @@ type PendingEmbedsCounter interface {
 	CountPending(ctx context.Context) (int, error)
 }
 
+// PendingFTSCounter checks how many files the async FTS lane has yet to
+// reindex. Non-zero means lexical results from eng_search_semantic are partial.
+type PendingFTSCounter interface {
+	CountPendingFTS(ctx context.Context) (int, error)
+}
+
 // DegradedReasonEmbeddingsPending indicates that the daemon has un-embedded nodes queued.
 const DegradedReasonEmbeddingsPending = "embeddings_pending"
+
+// DegradedReasonFTSPending indicates the async FTS lane has not finished
+// rebuilding the lexical index, so lexical/keyword search results are partial.
+const DegradedReasonFTSPending = "fts_pending"
 
 // SimilarLookup defines the query interface for checking code similarity by content hash.
 type SimilarLookup interface {
@@ -43,9 +53,16 @@ type SimilarLookup interface {
 type SearchToolOption func(*searchToolConfig)
 
 type searchToolConfig struct {
-	graph     ports.GraphReader
-	scans     ScanTrackerReader
-	reconcile ReconcileReader
+	graph      ports.GraphReader
+	scans      ScanTrackerReader
+	reconcile  ReconcileReader
+	ftsPending PendingFTSCounter
+}
+
+// WithSearchFTSPending registers the counter that flags partial lexical
+// results while the async FTS lane is still draining.
+func WithSearchFTSPending(c PendingFTSCounter) SearchToolOption {
+	return func(cfg *searchToolConfig) { cfg.ftsPending = c }
 }
 
 // WithSearchScanTracker registers the background scan tracker.
@@ -109,7 +126,7 @@ func RegisterSearchTools(
 		Description:     DescSearchSemantic,
 		IncludesStaging: false,
 		InputSchema:     searchSemanticInputSchema,
-		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending, cfg.scans, cfg.reconcile),
+		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending, cfg.ftsPending, cfg.scans, cfg.reconcile),
 	})
 	r.MustRegister(ToolSpec{
 		Name:            "eng_search_similar",

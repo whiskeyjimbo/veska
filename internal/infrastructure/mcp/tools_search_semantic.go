@@ -26,7 +26,7 @@ type searchSemanticParams struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister, pending PendingEmbedsCounter, scans ScanTrackerReader, reconcile ReconcileReader) ToolHandler {
+func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos application.RepoLister, pending PendingEmbedsCounter, ftsPending PendingFTSCounter, scans ScanTrackerReader, reconcile ReconcileReader) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {
 		var p searchSemanticParams
 		if rpcErr := bindParams(raw, &p); rpcErr != nil {
@@ -59,6 +59,14 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		if pending != nil {
 			if n, perr := pending.CountPending(ctx); perr == nil && n > 0 {
 				reasons = append(reasons, DegradedReasonEmbeddingsPending)
+			}
+		}
+		// Lexical half of the fusion is partial until the async FTS lane drains
+		// (mostly right after a cold scan); flag it so callers don't read a thin
+		// keyword-side ranking as authoritative.
+		if ftsPending != nil {
+			if n, perr := ftsPending.CountPendingFTS(ctx); perr == nil && n > 0 {
+				reasons = append(reasons, DegradedReasonFTSPending)
 			}
 		}
 		dtos := searchResultsToDTO(results)

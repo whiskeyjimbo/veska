@@ -14,6 +14,7 @@ var workKinds = []string{
 	string(ports.WorkKindEmbed),
 	string(ports.WorkKindAutoLink),
 	string(ports.WorkKindRevalidate),
+	string(ports.WorkKindFTS),
 }
 
 // PromotionWorkKinds returns the enqueued work types. The 'review' and
