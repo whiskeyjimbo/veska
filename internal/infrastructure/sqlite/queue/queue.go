@@ -50,6 +50,14 @@ type Poller struct {
 	// is in flight. When nil the poller never pauses
 	// inject via WithPauser at construction.
 	pauser func() bool
+
+	// kindPausers holds optional per-work_kind gates checked in ADDITION to
+	// the global pauser. A kind whose gate returns true skips its tick (rows
+	// stay pending, not failed) until the gate clears. Used to hold the
+	// auto_link lane until embeddings are ready - autolink reads vectors that
+	// the embedder is still producing, and a row that runs too early silently
+	// under-links with no retry. Read-only after construction.
+	kindPausers map[WorkKind]func() bool
 }
 
 // defaultPollInterval is the poll cadence used when WithInterval is not given.
@@ -76,6 +84,20 @@ func WithPauser(fn func() bool) Option {
 		if fn != nil {
 			p.pauser = fn
 		}
+	}
+}
+
+// WithKindPauser registers an additional pause predicate scoped to one
+// work_kind, checked alongside the global pauser. A nil predicate is ignored.
+func WithKindPauser(kind WorkKind, fn func() bool) Option {
+	return func(p *Poller) {
+		if fn == nil {
+			return
+		}
+		if p.kindPausers == nil {
+			p.kindPausers = make(map[WorkKind]func() bool)
+		}
+		p.kindPausers[kind] = fn
 	}
 }
 
@@ -134,6 +156,7 @@ func (p *Poller) Wait() {
 // ~1 row / interval (e.g. 844 files = ~3.5min at the 250ms default); see
 // pollloop.Run for the shared rationale.
 func (p *Poller) runKind(ctx context.Context, kind WorkKind, handler WorkHandler) {
+	kindPause := p.kindPausers[kind]
 	pollloop.Run(ctx, p.interval, func(ctx context.Context) bool {
 		// Yield the whole drain while a cold scan is in flight - the
 		// queue's work routinely takes the Write lock for tens-to-hundreds
@@ -141,6 +164,10 @@ func (p *Poller) runKind(ctx context.Context, kind WorkKind, handler WorkHandler
 		// turns a 1-minute scan into a 9-minute one (pprof). Returning
 		// false idles for one interval, then we re-check.
 		if p.pauser != nil && p.pauser() {
+			return false
+		}
+		// Per-kind gate: e.g. hold auto_link until embeddings are ready.
+		if kindPause != nil && kindPause() {
 			return false
 		}
 		return p.processOne(ctx, kind, handler)

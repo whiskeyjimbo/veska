@@ -195,6 +195,61 @@ func TestPoller_PauserBlocksProcessing(t *testing.T) {
 	}
 }
 
+// TestPoller_KindPauserGatesOneLane verifies a per-kind pauser holds only its
+// own work_kind (auto_link) while other lanes (embed) drain, and that the gated
+// lane proceeds once its pauser clears.
+func TestPoller_KindPauserGatesOneLane(t *testing.T) {
+	t.Parallel()
+
+	db := openTestDB(t)
+	autoSeq := insertPendingRow(t, db, queue.WorkKindAutoLink)
+	embedSeq := insertPendingRow(t, db, queue.WorkKindEmbed)
+
+	autoCalled := make(chan queue.Row, 1)
+	embedCalled := make(chan queue.Row, 1)
+	autoH := &handlerFunc{fn: func(_ context.Context, row queue.Row) error { autoCalled <- row; return nil }}
+	embedH := &handlerFunc{fn: func(_ context.Context, row queue.Row) error { embedCalled <- row; return nil }}
+
+	var autoGate atomic.Bool
+	autoGate.Store(true)
+	p := queue.New(db, db, map[queue.WorkKind]queue.WorkHandler{
+		queue.WorkKindAutoLink: autoH,
+		queue.WorkKindEmbed:    embedH,
+	}, queue.WithInterval(25*time.Millisecond),
+		queue.WithKindPauser(queue.WorkKindAutoLink, autoGate.Load))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	p.Start(ctx)
+
+	// embed (ungated) must drain; auto_link (gated) must not.
+	select {
+	case <-embedCalled:
+	case <-ctx.Done():
+		t.Fatal("embed lane never fired despite no gate")
+	}
+	select {
+	case row := <-autoCalled:
+		t.Fatalf("auto_link fired while its gate was true: %+v", row)
+	case <-time.After(250 * time.Millisecond):
+	}
+	if state, _ := rowState(t, db, autoSeq); state != "pending" {
+		t.Errorf("auto_link row left pending state while gated: %q", state)
+	}
+	_ = embedSeq
+
+	// Clear the gate; auto_link must now process.
+	autoGate.Store(false)
+	select {
+	case row := <-autoCalled:
+		if row.Seq != autoSeq {
+			t.Errorf("auto_link got seq=%d, want %d", row.Seq, autoSeq)
+		}
+	case <-ctx.Done():
+		t.Fatal("auto_link never fired after its gate cleared")
+	}
+}
+
 // TestPoller_RetryAndFail verifies that a handler error increments attempts,
 // re-queues as pending, and after 3 attempts transitions to failed.
 func TestPoller_RetryAndFail(t *testing.T) {
