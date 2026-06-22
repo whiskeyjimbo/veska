@@ -13,6 +13,51 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 )
 
+func TestFindingRepo_SaveBatch(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	db := openTest(t, filepath.Join(dir, "v.db"))
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?, ?, ?)`,
+		"repo1", "/tmp/repo1", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	repo := sqlite.NewFindingRepo(db)
+
+	mk := func(anchor string) *domain.Finding {
+		f, err := domain.NewFinding(domain.FindingSpec{RepoID: "repo1", Branch: "main", Severity: domain.SeverityLow, Layer: domain.LayerSemantic, Rule: "auto-link", Message: "m"}, domain.WithNodeAnchor(anchor))
+		if err != nil {
+			t.Fatalf("NewFinding: %v", err)
+		}
+		return f
+	}
+	batch := []*domain.Finding{mk("e1"), mk("e2"), nil, mk("e3")} // nil is skipped
+
+	if err := repo.SaveBatch(context.Background(), batch); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	count := func() int {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM findings WHERE rule='auto-link'`).Scan(&n); err != nil {
+			t.Fatalf("count: %v", err)
+		}
+		return n
+	}
+	if got := count(); got != 3 {
+		t.Fatalf("after SaveBatch: want 3 findings, got %d", got)
+	}
+	// Idempotent: re-saving the same batch upserts, does not duplicate.
+	if err := repo.SaveBatch(context.Background(), batch); err != nil {
+		t.Fatalf("SaveBatch (2nd): %v", err)
+	}
+	if got := count(); got != 3 {
+		t.Fatalf("after 2nd SaveBatch: want 3 (idempotent), got %d", got)
+	}
+	// Empty batch is a no-op, no error.
+	if err := repo.SaveBatch(context.Background(), nil); err != nil {
+		t.Fatalf("SaveBatch(nil): %v", err)
+	}
+}
+
 func TestFindingRepo_SaveRoundTrip(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

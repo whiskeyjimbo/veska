@@ -30,51 +30,10 @@ func NewFindingRepo(db *sql.DB) *FindingRepo {
 // if the finding already exists on the branch. Fields not defined on the
 // domain object, such as default actor metadata for automated checks, are
 // filled in with default values.
-func (r *FindingRepo) Save(ctx context.Context, f *domain.Finding) error {
-	if f == nil {
-		return fmt.Errorf("sqlite.FindingRepo.Save: nil finding")
-	}
-
-	actorID := "service:veska"
-	if f.ActorID != nil {
-		actorID = *f.ActorID
-	}
-	actorKind := string(domain.ActorKindSystem)
-	if f.ActorKind != nil {
-		actorKind = string(*f.ActorKind)
-	}
-
-	var (
-		nodeIDArg   any
-		filePathArg any
-	)
-	if f.NodeID != nil {
-		nodeIDArg = *f.NodeID
-	}
-	if f.FilePath != nil {
-		filePathArg = *f.FilePath
-	}
-
-	var closedAtArg any
-	if f.ClosedAt != nil {
-		closedAtArg = f.ClosedAt.UnixMilli()
-	}
-	var closedReasonArg any
-	if f.ClosedReason != nil {
-		closedReasonArg = *f.ClosedReason
-	}
-
-	// Using sql.NullString maintains the distinction between a NULL and an empty
-	// string, allowing the revalidation sweep to reliably distinguish between
-	// a missing hash and an empty hash value.
-	var anchorHashArg sql.NullString
-	if f.AnchorContentHash != nil {
-		anchorHashArg = sql.NullString{String: *f.AnchorContentHash, Valid: true}
-	}
-
-	now := time.Now().UnixMilli()
-
-	const stmt = `
+// findingUpsertStmt is shared by Save (single autocommit) and SaveBatch (one tx
+// for the whole slice). Kept identical so batched and unbatched writes are
+// indistinguishable to readers.
+const findingUpsertStmt = `
 INSERT INTO findings (
     finding_id, branch, repo_id, node_id, file_path,
     severity, source_layer, rule, message, state,
@@ -96,14 +55,86 @@ ON CONFLICT(finding_id, branch) DO UPDATE SET
     actor_kind          = excluded.actor_kind,
     anchor_content_hash = excluded.anchor_content_hash`
 
-	_, err := r.db.ExecContext(ctx, stmt,
+// findingArgs maps a Finding to the 16 positional args of findingUpsertStmt.
+func findingArgs(f *domain.Finding, now int64) []any {
+	actorID := "service:veska"
+	if f.ActorID != nil {
+		actorID = *f.ActorID
+	}
+	actorKind := string(domain.ActorKindSystem)
+	if f.ActorKind != nil {
+		actorKind = string(*f.ActorKind)
+	}
+	var nodeIDArg, filePathArg any
+	if f.NodeID != nil {
+		nodeIDArg = *f.NodeID
+	}
+	if f.FilePath != nil {
+		filePathArg = *f.FilePath
+	}
+	var closedAtArg any
+	if f.ClosedAt != nil {
+		closedAtArg = f.ClosedAt.UnixMilli()
+	}
+	var closedReasonArg any
+	if f.ClosedReason != nil {
+		closedReasonArg = *f.ClosedReason
+	}
+	// sql.NullString keeps NULL distinct from empty so the revalidation sweep
+	// can tell a missing hash from an empty one.
+	var anchorHashArg sql.NullString
+	if f.AnchorContentHash != nil {
+		anchorHashArg = sql.NullString{String: *f.AnchorContentHash, Valid: true}
+	}
+	return []any{
 		f.FindingID, f.Branch, f.RepoID, nodeIDArg, filePathArg,
 		string(f.Severity), string(f.SourceLayer), f.Rule, f.Message, string(f.State),
 		closedReasonArg, now, closedAtArg, actorID, actorKind,
 		anchorHashArg,
-	)
-	if err != nil {
+	}
+}
+
+func (r *FindingRepo) Save(ctx context.Context, f *domain.Finding) error {
+	if f == nil {
+		return fmt.Errorf("sqlite.FindingRepo.Save: nil finding")
+	}
+	if _, err := r.db.ExecContext(ctx, findingUpsertStmt, findingArgs(f, time.Now().UnixMilli())...); err != nil {
 		return fmt.Errorf("sqlite.FindingRepo.Save: %w", err)
+	}
+	return nil
+}
+
+// SaveBatch upserts many findings in a single transaction - one fsync for the
+// whole slice instead of one per finding. Autolink emits up to k findings per
+// source node across a file (thousands on a cold scan); the per-row Save path
+// was ~half of the autolink lane's drain time, all of it WAL-commit overhead.
+func (r *FindingRepo) SaveBatch(ctx context.Context, findings []*domain.Finding) error {
+	if len(findings) == 0 {
+		return nil
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite.FindingRepo.SaveBatch: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	ps, err := tx.PrepareContext(ctx, findingUpsertStmt)
+	if err != nil {
+		return fmt.Errorf("sqlite.FindingRepo.SaveBatch: prepare: %w", err)
+	}
+	defer ps.Close()
+
+	now := time.Now().UnixMilli()
+	for _, f := range findings {
+		if f == nil {
+			continue
+		}
+		if _, err := ps.ExecContext(ctx, findingArgs(f, now)...); err != nil {
+			return fmt.Errorf("sqlite.FindingRepo.SaveBatch: upsert %s: %w", f.FindingID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite.FindingRepo.SaveBatch: commit: %w", err)
 	}
 	return nil
 }
