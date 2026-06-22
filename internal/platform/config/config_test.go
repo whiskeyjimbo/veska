@@ -10,8 +10,8 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	c := DefaultConfig()
-	if c.Embedder.RatePerSec != 10 {
-		t.Errorf("embedder.rate_per_sec: got %v want 10", c.Embedder.RatePerSec)
+	if c.Embedder.Model != "nomic-embed-text" {
+		t.Errorf("embedder.model: got %q want nomic-embed-text", c.Embedder.Model)
 	}
 	if c.PostPromotionQueue.PollInterval != "250ms" {
 		t.Errorf("post_promotion_queue.poll_interval: got %q want 250ms", c.PostPromotionQueue.PollInterval)
@@ -43,8 +43,8 @@ func TestLoadNoFileReturnsDefaults(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	def := DefaultConfig()
-	if c.Embedder.RatePerSec != def.Embedder.RatePerSec {
-		t.Errorf("missing file should yield defaults: got %v", c.Embedder.RatePerSec)
+	if c.Embedder.Endpoint != def.Embedder.Endpoint {
+		t.Errorf("missing file should yield defaults: got %q", c.Embedder.Endpoint)
 	}
 }
 
@@ -53,8 +53,11 @@ func TestLoadDecodesFileOverridesDefaults(t *testing.T) {
 	t.Setenv("VESKA_HOME", dir)
 	clearOverrideEnv(t)
 
+	// The stale rate_per_sec key (removed in solov2-fi42) must be silently
+	// ignored, not break Load - existing config files still carry it.
 	toml := `
 [embedder]
+endpoint = "http://example:9999"
 rate_per_sec = 25
 
 [post_promotion_queue]
@@ -68,8 +71,8 @@ poll_interval = "500ms"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if c.Embedder.RatePerSec != 25 {
-		t.Errorf("file override embedder.rate_per_sec: got %v want 25", c.Embedder.RatePerSec)
+	if c.Embedder.Endpoint != "http://example:9999" {
+		t.Errorf("file override embedder.endpoint: got %q want http://example:9999", c.Embedder.Endpoint)
 	}
 	if c.PostPromotionQueue.PollInterval != "500ms" {
 		t.Errorf("file override poll_interval: got %q want 500ms", c.PostPromotionQueue.PollInterval)

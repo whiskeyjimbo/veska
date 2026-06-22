@@ -64,6 +64,16 @@ type Metrics struct {
 	// "<kind> <symbol_path>" share one vector).
 	EmbedDedupHits prometheus.Counter
 
+	// EmbedConcurrencyLimit is the embedder Governor's current in-flight ceiling,
+	// sampled once per drain pass. Fixed at 1 for local/Ollama; an adaptive
+	// governor (hosted APIs) moves it with observed latency and 429 backoff.
+	EmbedConcurrencyLimit prometheus.Gauge
+
+	// EmbedBatchLatency is the wall-clock duration of each embed call (one
+	// batched roundtrip, or one serial-fallback batch). The signal the
+	// adaptive governor calibrates against; also reveals provider slowdowns.
+	EmbedBatchLatency prometheus.Histogram
+
 	// AutolinkCandidates counts auto-link candidate edges emitted by the
 	// similarity service (internal/application/autolink). Label: repo_id.
 	// One increment per emitted Candidate, NOT per Linker.Candidates call
@@ -163,6 +173,20 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		},
 	)
 
+	embedConcurrencyLimit := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "veska_embed_concurrency_limit",
+			Help: "Embedder Governor's current in-flight ceiling. Sampled per drain pass.",
+		},
+	)
+
+	embedBatchLatency := prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "veska_embed_batch_latency_seconds",
+			Help: "Wall-clock duration of a single embed call (one batched roundtrip or one serial-fallback batch).",
+		},
+	)
+
 	autolinkCandidates := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "veska_autolink_candidates_total",
@@ -195,6 +219,8 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		checkLatency,
 		embedQueueDepth,
 		embedDedupHits,
+		embedConcurrencyLimit,
+		embedBatchLatency,
 		autolinkCandidates,
 		revalidateClosed,
 		revalidateRefreshed,
@@ -210,6 +236,8 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		CheckLatency:           checkLatency,
 		EmbedQueueDepth:        embedQueueDepth,
 		EmbedDedupHits:         embedDedupHits,
+		EmbedConcurrencyLimit:  embedConcurrencyLimit,
+		EmbedBatchLatency:      embedBatchLatency,
 		AutolinkCandidates:     autolinkCandidates,
 		RevalidateClosed:       revalidateClosed,
 		RevalidateRefreshed:    revalidateRefreshed,
