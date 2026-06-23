@@ -63,7 +63,6 @@ func (f *fakeVectors) Search(_ context.Context, repoID, branch string, vec []flo
 	return f.hits, f.err
 }
 func (f *fakeVectors) DeleteNodes(context.Context, string, string, []string) error { return nil }
-func (f *fakeVectors) Reindex(_ context.Context, _, _ string) error                { return nil }
 func (f *fakeVectors) LookupContentHashes(_ context.Context, _, _ string, _ []string) (map[string]string, error) {
 	return nil, nil
 }

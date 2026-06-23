@@ -333,11 +333,6 @@ func siftDown(h []candidate, i int) {
 	}
 }
 
-// Reindex is a no-op because the linear-scan store does not maintain a persistent index structure.
-func (s *Store) Reindex(_ context.Context, _ string, _ string) error {
-	return nil
-}
-
 // LookupContentHashes returns a map of node IDs to their content hashes for the specified
 // repository and branch. Identifiers that do not exist are silently omitted.
 func (s *Store) LookupContentHashes(_ context.Context, repoID, branch string, nodeIDs []string) (map[string]string, error) {

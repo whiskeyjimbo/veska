@@ -19,10 +19,6 @@ type VectorStorage interface {
 	// all stored vectors are returned.
 	Search(ctx context.Context, repoID, branch string, vec []float32, k int, filter domain.VectorFilter) ([]domain.SearchHit, error)
 
-	// Reindex rebuilds all stored embeddings. Implementations may treat this
-	// as a no-op if the backing store handles quantization internally.
-	Reindex(ctx context.Context, repoID string, modelID string) error
-
 	// DeleteNodes removes the given nodes' vectors from (repoID, branch) across
 	// every model partition. Called when a re-promote drops symbols, so their
 	// vectors don't linger as stale scan candidates until a daemon restart.

@@ -286,12 +286,6 @@ func (s *UsearchStore) Search(_ context.Context, repoID, branch string, vec []fl
 	return hits, nil
 }
 
-// Reindex is a no-op implementation because the store maintains vector indexes in-memory.
-// Re-quantization is natively handled at load time via the index configuration.
-func (s *UsearchStore) Reindex(_ context.Context, _ string, _ string) error {
-	return nil
-}
-
 // LookupContentHashes retrieves the content hashes for the specified node IDs within a repository and branch.
 // Identifiers that are not present in the index are silently omitted from the returned map.
 func (s *UsearchStore) LookupContentHashes(_ context.Context, repoID, branch string, nodeIDs []string) (map[string]string, error) {
