@@ -108,6 +108,38 @@ func TestCloneRepo_GroupsSharedHashes(t *testing.T) {
 	}
 }
 
+// TestCloneRepo_EmptyHashesDoNotGroup pins solov2-ozoi.2: nodes whose
+// content_hash is ” (the index path leaves it empty when no hash is computed)
+// must NOT be bucketed together as byte-identical clones. A genuine hashed pair
+// alongside proves real grouping still works.
+func TestCloneRepo_EmptyHashesDoNotGroup(t *testing.T) {
+	t.Parallel()
+	db, repo := openCloneTestDB(t)
+	ctx := context.Background()
+
+	for _, id := range []string{"e1", "e2", "e3", "e4"} {
+		seedHashedNode(t, db, hashedNode{"r1", "main", id, "function", ""})
+	}
+	seedHashedNode(t, db, hashedNode{"r1", "main", "x1", "function", "hx"})
+	seedHashedNode(t, db, hashedNode{"r1", "main", "x2", "function", "hx"})
+
+	got, err := repo.ClonedNodes(ctx, duplicates.CloneQuery{RepoID: "r1", Branch: "main"}, duplicates.ExcludedKinds)
+	if err != nil {
+		t.Fatalf("ClonedNodes: %v", err)
+	}
+	ids := make([]string, 0, len(got))
+	for _, n := range got {
+		if n.ContentHash == "" {
+			t.Errorf("empty-hash node %q grouped as a clone (false byte-identity)", n.NodeID)
+		}
+		ids = append(ids, n.NodeID)
+	}
+	sort.Strings(ids)
+	if len(ids) != 2 || ids[0] != "x1" || ids[1] != "x2" {
+		t.Fatalf("got %v, want only the genuine pair [x1 x2]", ids)
+	}
+}
+
 // TestCloneRepo_KindCountIsolation verifies that a chunk sharing a hash with a function does not trigger grouping when the chunk kind is excluded.
 func TestCloneRepo_KindCountIsolation(t *testing.T) {
 	t.Parallel()
