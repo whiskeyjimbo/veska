@@ -303,6 +303,17 @@ loadtest:
 eval-recall:
 	RECALL_POP=$${RECALL_POP:-1000} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestRecall ./tools/loadtest/recall/ -v
 
+# eval-usearch-ab: usearch (HNSW/float16) vs exact memvec on the REAL graph.
+# Reads the live ~/.veska/veska.db (override VESKA_HOME), feeds byte-identical
+# production vectors to both backends, and reports autolink recall parity (memvec
+# is the exact oracle), per-query latency, and index-BUILD cost. Requires the
+# hnsw_native tag + libusearch_c.so on the loader path. USEARCH_AB_SCALE>1
+# synthesizes a larger corpus (perturbed real vectors) to probe higher N while
+# staying under memvec's 75k YellowThreshold. Report: $$TMPDIR/usearch-ab.json.
+# Skips cleanly if no live db is present. See tools/loadtest/usearchab/.
+eval-usearch-ab:
+	USEARCH_AB_SCALE=$${USEARCH_AB_SCALE:-1} $(SQLITE_CGO_ENV) go test -tags "eval hnsw_native $(SQLITE_TAGS)" -run TestUsearchAB ./tools/loadtest/usearchab/ -v -count=1 -timeout 30m
+
 # eval-recall-projection: recall@10 + p95 sweep over embed-text PROJECTION
 # variants (baseline / +signature / +snippet / +both). The corpus is built
 # from node-shaped inputs run through the production domain.EmbedText
