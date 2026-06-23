@@ -15,6 +15,8 @@ when you want the binding details.
   recall on save, semantic recall on commit.
 - **[Semantic search & embeddings](embeddings.md)** - the in-process embedder
   and the lexical fallback.
+- **[Vector storage backends](vector-backends.md)** - memvec vs usearch, the
+  size-vs-latency trade-off, and when to switch.
 - **[Finding duplicate & similar code](duplicates.md)** - exact, structural
   (renamed), and near tiers, repo-wide and cross-repo.
 - **[Daemon topology](daemon-topology.md)** - one binary, three personalities,
