@@ -164,7 +164,7 @@ func (w *mcpToolWiring) registerOwnerTodoAdminTools() {
 	mcp.RegisterTodoTools(w.r, sqlite.NewTodoQuerierRepo(w.pools.ReadDB), w.repos())
 	mcp.RegisterAdminTools(w.r,
 		w.repos(),
-		&statusProvider{db: w.pools.ReadDB, scans: w.d.scanTracker},
+		&statusProvider{db: w.pools.ReadDB, scans: w.d.scanTracker, pressure: w.d.memPressure},
 		&configProvider{cfg: w.d.cfg},
 	)
 }

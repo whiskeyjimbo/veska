@@ -69,6 +69,7 @@ type daemonBuilder struct {
 	resyncRef        *application.StartupResync
 	ingestionBusy    func() bool
 	writeBusy        func() bool
+	memPressure      func() bool
 	availMem         availMemFunc
 	embedderIsOllama bool
 
@@ -230,6 +231,10 @@ func (b *daemonBuilder) openStorage() error {
 func (b *daemonBuilder) buildIngestionBusy(avail availMemFunc) {
 	b.scanTracker = application.NewScanTracker()
 	b.availMem = avail
+	floor := resolveFloorBytes(b.fileCfg.Storage.MemoryPressureFloorMiB)
+	// memPressure is the raw memory-pressure predicate, surfaced in
+	// eng_get_status so operators can see the deferral instead of guessing.
+	b.memPressure = func() bool { return underMemoryPressure(b.availMem, floor) }
 
 	// writeBusy: a cold scan or startup resync is holding the Write pool. The
 	// embedder skips its tick on this so it can't race the promotion Write tx
@@ -249,7 +254,7 @@ func (b *daemonBuilder) buildIngestionBusy(avail availMemFunc) {
 	// only the DEFERRABLE post-promotion queue lanes (auto_link/fts/revalidate).
 	// The pressureGate logs the rising/falling edge so the throttle is no longer
 	// a silent, undiagnosable stall.
-	gate := newPressureGate(b.availMem, slog.Default())
+	gate := newPressureGate(b.availMem, floor, slog.Default())
 	b.ingestionBusy = func() bool {
 		if b.writeBusy() {
 			return true
@@ -705,6 +710,7 @@ func (b *daemonBuilder) buildMCPServer() error {
 		regSvc:             b.regSvc,
 		reparser:           b.reparser,
 		scanTracker:        b.scanTracker,
+		memPressure:        b.memPressure,
 		reconciler:         b.reconciler,
 		savings:            b.savingsRec,
 		hubDegreeThreshold: b.fileCfg.Blast.HubDegreeThreshold,

@@ -50,7 +50,7 @@ func defaultAvailMem() (uint64, bool) {
 // ~250ms across goroutines; the underlying read is a stateless syscall with no
 // shared mutable state, so it is safe to call concurrently. A nil reader or an
 // unsupported platform (ok=false) degrades to false (never pause).
-func underMemoryPressure(avail availMemFunc) bool {
+func underMemoryPressure(avail availMemFunc, floorBytes uint64) bool {
 	if avail == nil {
 		return false
 	}
@@ -58,7 +58,16 @@ func underMemoryPressure(avail availMemFunc) bool {
 	if !ok {
 		return false
 	}
-	return n < pressureFloorBytes
+	return n < floorBytes
+}
+
+// resolveFloorBytes maps the operator's [storage] memory_pressure_floor_mib into
+// bytes, falling back to the built-in pressureFloorBytes when unset (<= 0).
+func resolveFloorBytes(cfgMiB int) uint64 {
+	if cfgMiB > 0 {
+		return uint64(cfgMiB) << 20
+	}
+	return pressureFloorBytes
 }
 
 // maybeWarnLowMemory emits a one-shot WARN when the memvec backend is elected
@@ -86,19 +95,20 @@ func maybeWarnLowMemory(backend vector.BackendKind, avail availMemFunc, logger *
 // guarded so concurrent callers stay race-free.
 type pressureGate struct {
 	avail  availMemFunc
+	floor  uint64
 	logger *slog.Logger
 	mu     sync.Mutex
 	active bool
 }
 
-func newPressureGate(avail availMemFunc, logger *slog.Logger) *pressureGate {
-	return &pressureGate{avail: avail, logger: logger}
+func newPressureGate(avail availMemFunc, floorBytes uint64, logger *slog.Logger) *pressureGate {
+	return &pressureGate{avail: avail, floor: floorBytes, logger: logger}
 }
 
 // busy reports whether memory pressure should defer the deferrable lanes, and
 // logs the transition into/out of that state.
 func (g *pressureGate) busy() bool {
-	under := underMemoryPressure(g.avail)
+	under := underMemoryPressure(g.avail, g.floor)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	switch {
@@ -106,7 +116,7 @@ func (g *pressureGate) busy() bool {
 		g.active = true
 		n, _ := g.avail()
 		g.logger.Warn("daemon: memory pressure - deferring post-promotion queue lanes (embedding continues); free RAM or switch to VESKA_VECTOR_BACKEND=usearch",
-			"available_mib", n>>20, "floor_mib", pressureFloorBytes>>20)
+			"available_mib", n>>20, "floor_mib", g.floor>>20)
 	case !under && g.active:
 		g.active = false
 		g.logger.Info("daemon: memory pressure cleared - resuming post-promotion queue lanes")
