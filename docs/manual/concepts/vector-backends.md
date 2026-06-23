@@ -27,10 +27,9 @@ with `make eval-backend-matrix`.
 | grpc-go |  19,520 |             6.2 ms |              0.3 ms |         0.9979 |       59 MiB |       129 MiB |
 | consul  |  37,272 |            11.6 ms |              0.4 ms |         0.9965 |      113 MiB |       129 MiB |
 
-The trend *is* the decision: **memvec's query latency climbs with repo size
-(4 → 12 ms) while usearch stays flat (~0.3 ms)** - a 14x gap on the smallest repo
-widening to 27x on the largest. usearch pays for that with roughly 2x the RAM and
-a multi-second index build (versus memvec's milliseconds); recall holds above
+The trend: **memvec's query latency climbs with repo size
+(4 → 12 ms) while usearch stays flat (~0.3 ms)**. usearch pays for that with roughly 2x 
+the RAM and a multi-second index build (versus memvec's milliseconds); recall holds above
 99.6% throughout.
 
 !!! note "What the columns mean"
@@ -43,8 +42,8 @@ a multi-second index build (versus memvec's milliseconds); recall holds above
 
 ## Which should I use?
 
-- **Small-to-medium repos (under ~50k symbols): `memory`.** It is the default for
-  good reason - exact, zero-setup, lowest RAM, and single-digit-millisecond
+- **Small-to-medium repos (under ~50k symbols): `memory`.** It is the default -
+  exact, zero-setup, lowest RAM, and single-digit-millisecond
   queries are imperceptible. Most repositories never need anything else.
 - **Large repos, or latency-sensitive multi-repo setups: `usearch`.** Once
   linear-scan latency becomes noticeable - tens of milliseconds, or auto-linking
@@ -52,9 +51,6 @@ a multi-second index build (versus memvec's milliseconds); recall holds above
   `VESKA_VECTOR_BACKEND=usearch`; it requires the `hnsw_native` build and
   `libusearch_c.so` on the loader path, or the daemon refuses to start.
 
-!!! note "usearch is no longer the low-memory option"
-    usearch stores full float32 vectors - the same precision as the durable
-    `node_embeddings` - so it now holds about as much vector data as memvec *plus*
-    its HNSW graph. memvec is the RAM-saver; usearch buys query speed, not memory.
+!!! note "usearch is not the low-memory option"
 
 Next: **[Daemon topology](daemon-topology.md)**.
