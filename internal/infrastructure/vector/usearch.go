@@ -144,6 +144,24 @@ func (s *UsearchStore) DeleteNodes(_ context.Context, repoID, branch string, nod
 	return nil
 }
 
+// MemoryUsage reports the total resident bytes of the native HNSW indexes
+// (float32 vectors + graph), as accounted by usearch itself - the honest
+// C-side footprint, which Go's HeapAlloc cannot see. Go-side metadata maps are
+// excluded. Used by the backend-metrics eval harness.
+func (s *UsearchStore) MemoryUsage() (uint64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var total uint64
+	for _, e := range s.indexes {
+		u, err := e.idx.MemoryUsage()
+		if err != nil {
+			return 0, fmt.Errorf("usearch: memory usage: %w", err)
+		}
+		total += uint64(u)
+	}
+	return total, nil
+}
+
 // Compile-time check to ensure UsearchStore implements the ports.VectorStorage interface.
 var _ ports.VectorStorage = (*UsearchStore)(nil)
 
