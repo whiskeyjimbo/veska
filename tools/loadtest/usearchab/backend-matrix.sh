@@ -29,11 +29,22 @@ READY_TIMEOUT=60
 
 # tier | label | source  (source = github "owner/name" or "LOCAL:<path>")
 REPOS=(
-  "S  go-git  go-git/go-git"
-  "M  veska   LOCAL:$REPO_SRC"
-  "M2 grpc-go grpc/grpc-go"
-  "L  consul  hashicorp/consul"
+  "S   go-git  go-git/go-git"
+  "M   veska   LOCAL:$REPO_SRC"
+  "M2  grpc-go grpc/grpc-go"
+  "L   consul  hashicorp/consul"
+  # Heavy XL/XXL repos - uncomment to extend the curve. They clone GBs and take
+  # tens of minutes to index; set the sampling knobs below when you do.
+  # "XL  tidb    pingcap/tidb"
+  # "XXL k8s     kubernetes/kubernetes"
 )
+
+# For big repos: USEARCH_AB_MAX_QUERIES samples the per-node autolink sweep
+# (memvec is O(n^2), intractable past ~50k nodes); USEARCH_AB_MEMVEC_MAX_NODES
+# skips the in-RAM memvec build above that node count (usearch-only row). Both
+# default off. Suggested for the big repos: 2000 and 150000.
+export USEARCH_AB_MAX_QUERIES=${USEARCH_AB_MAX_QUERIES:-0}
+export USEARCH_AB_MEMVEC_MAX_NODES=${USEARCH_AB_MEMVEC_MAX_NODES:-0}
 
 note() { printf '\033[1;36m[matrix]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[matrix] FATAL:\033[0m %s\n' "$*" >&2; exit 1; }
