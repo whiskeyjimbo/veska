@@ -17,8 +17,8 @@ if Veska can find the *nearest* ones to a query quickly. That is the job of the
 Measured across Go repositories spanning ~11k to ~113k symbols, each indexed in
 isolation (model2vec embeddings, float32 index, deterministic serial build).
 memvec's linear scan returns the exact nearest neighbours, so it is the **recall
-oracle** - 1.0000 by definition - and usearch's recall is the fraction of those
-exact matches it also returns. Regenerate this table with `make eval-backend-matrix`.
+baseline** - 1.0000 by definition - and usearch's recall is the fraction of those
+exact matches it also returns.
 
 | repo    | symbols | time to ready | usearch build | query p95 (memvec) | query p95 (usearch) | usearch recall | RAM (memvec) | RAM (usearch) |
 |---------|--------:|--------------:|--------------:|-------------------:|--------------------:|---------------:|-------------:|--------------:|
@@ -43,14 +43,12 @@ Three things the curve makes clear:
   So "memvec is ready faster" is technically true but negligible.
 
 !!! note "What the columns mean"
-    **Symbols** - functions, types, methods, and code chunks; a repo's "size" in
-    Veska terms. **Time to ready** - the one-time, backend-independent cost to
-    parse and embed the repo so it's searchable. **usearch build** - the extra
-    one-time cost to construct usearch's HNSW graph on top (memvec's is sub-second).
-    **Query p95** - the 95th-percentile latency of a single nearest-neighbour
-    lookup, which is what semantic search and auto-linking do per call. **Recall** -
-    of the truly-closest matches, the fraction usearch returns versus memvec's
-    exact result. **RAM** - the resident footprint of the vector index alone.
+    - **Symbols** - functions, types, methods, and code chunks; a repo's "size" in Veska terms. 
+    - **Time to ready** - the one-time, backend-independent cost to parse and embed the repo so it's searchable.
+    - **usearch build** - the extra one-time cost to construct usearch's HNSW graph on top (memvec's is sub-second).
+    - **Query p95** - the 95th-percentile latency of a single nearest-neighbour lookup, which is what semantic search and auto-linking do per call.
+    - **Recall** - of the truly-closest matches, the fraction usearch returns versus memvec's exact result.
+    - **RAM** - the resident footprint of the vector index alone.
 
 ## Which should I use?
 
