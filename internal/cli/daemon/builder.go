@@ -466,6 +466,7 @@ func (b *daemonBuilder) buildAutolinkHandler() (*autolink.Handler, error) {
 			}
 			return rec.Kind, nil
 		}),
+		autolink.WithEmbedReadiness(b.refs),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("daemon: autolink handler: %w", err)
@@ -559,19 +560,13 @@ func (b *daemonBuilder) buildSummaryHandler() (queue.WorkHandler, error) {
 // registrar. The poller and embedder share ingestionBusy.
 func (b *daemonBuilder) buildPollerWatcher() error {
 	pollInterval := parseDurationOr(b.fileCfg.PostPromotionQueue.PollInterval, 250*time.Millisecond)
-	// Hold the auto_link lane until the embedder has drained. autolink reads the
-	// vectors the embedder produces; a row that runs while embeddings are still
-	// pending silently skips its not-yet-embedded source nodes and is never
-	// retried, permanently under-linking those files on a cold scan (solov2-22e8).
-	// CountPending excludes orphaned refs (deleted nodes), and failed embeds end
-	// in state='failed' not 'pending', so the gate always clears.
-	autolinkGate := func() bool {
-		n, err := b.refs.CountPending(context.Background())
-		return err == nil && n > 0
-	}
+	// The auto_link lane runs concurrently with the embed drain; correctness
+	// comes from the per-file embed gate in the autolink handler
+	// (WithEmbedReadiness), which defers a row until that file's own nodes are
+	// embedded. This overlaps autolink with embedding instead of holding the
+	// whole lane until the backlog clears.
 	b.poller = queue.New(b.pools.ReadDB, b.pools.Write, b.handlers,
-		queue.WithInterval(pollInterval), queue.WithPauser(b.ingestionBusy),
-		queue.WithKindPauser(ports.WorkKindAutoLink, autolinkGate))
+		queue.WithInterval(pollInterval), queue.WithPauser(b.ingestionBusy))
 	b.watcher = gitwatch.NewMultiRepoWatcher()
 	b.reconciler = b.buildReconciler()
 

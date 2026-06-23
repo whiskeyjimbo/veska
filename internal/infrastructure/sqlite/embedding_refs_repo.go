@@ -95,6 +95,37 @@ func (r *EmbeddingRefsRepo) CountPending(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// PendingAmong counts how many of the given node IDs still have a pending
+// embedding. The auto_link handler calls it to decide whether to defer a file:
+// a row that runs while its own nodes are still pending would silently skip
+// those sources (Linker treats pending as not-ready) and never re-link them.
+// Failed embeds end in state='failed', not 'pending', so the count always
+// reaches zero and the defer can never wait forever. An empty input returns 0.
+func (r *EmbeddingRefsRepo) PendingAmong(ctx context.Context, nodeIDs []string) (int, error) {
+	if len(nodeIDs) == 0 {
+		return 0, nil
+	}
+	placeholders := make([]byte, 0, len(nodeIDs)*2-1)
+	args := make([]any, 0, len(nodeIDs))
+	for i, id := range nodeIDs {
+		if i > 0 {
+			placeholders = append(placeholders, ',')
+		}
+		placeholders = append(placeholders, '?')
+		args = append(args, id)
+	}
+	var n int
+	err := r.readDB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM node_embedding_refs
+		 WHERE state='pending' AND node_id IN (`+string(placeholders)+`)`,
+		args...,
+	).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("embedding_refs: pending among: %w", err)
+	}
+	return n, nil
+}
+
 // MarkReady atomically inserts the content-addressed embedding and marks the
 // reference as ready. The embedding insert uses ON CONFLICT DO NOTHING to avoid
 // overwriting existing equivalent embeddings, while updating the reference with

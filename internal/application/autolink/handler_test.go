@@ -125,6 +125,20 @@ func (f *fakeFindingStore) CloseSupersededByRule(_ context.Context, _, _, _ stri
 	return nil
 }
 
+// fakeReadiness reports a fixed pending count for any node set and records the
+// IDs it was asked about, so a test can assert the gate is checked before the
+// metadata hydration.
+type fakeReadiness struct {
+	pending int
+	err     error
+	gotIDs  [][]string
+}
+
+func (f *fakeReadiness) PendingAmong(_ context.Context, nodeIDs []string) (int, error) {
+	f.gotIDs = append(f.gotIDs, append([]string(nil), nodeIDs...))
+	return f.pending, f.err
+}
+
 // ── unit-level tests against fakes ─────────────────────────────────────────
 
 // mustHandler unwraps an autolink.NewHandler result, failing the test if the
@@ -278,6 +292,67 @@ func TestHandler_NoCandidatesIsNoop(t *testing.T) {
 	}
 	if len(edges.saved) != 0 || len(findings.saved) != 0 {
 		t.Errorf("expected no writes; edges=%v findings=%v", edges.saved, findings.saved)
+	}
+}
+
+func TestHandler_DefersWhileFileStillEmbedding(t *testing.T) {
+	t.Parallel()
+	lk := &fakeLookup{byPath: map[string][]string{"x.go": {"n1", "n2"}}}
+	linker := &fakeLinker{}
+	rdy := &fakeReadiness{pending: 1}
+	hh, herr := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, &fakeFindingStore{},
+		autolink.WithEmbedReadiness(rdy))
+	h := mustHandler(t, hh, herr)
+
+	err := h.Handle(context.Background(), queue.Row{
+		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if !errors.Is(err, ports.ErrDeferWork) {
+		t.Fatalf("expected ErrDeferWork while pending, got %v", err)
+	}
+	// The gate must run before any hydration or linker work, and against the
+	// file's full node set.
+	if linker.calls != 0 {
+		t.Errorf("linker ran on a deferred row: calls=%d", linker.calls)
+	}
+	if len(rdy.gotIDs) != 1 || len(rdy.gotIDs[0]) != 2 {
+		t.Errorf("readiness checked wrong node set: %v", rdy.gotIDs)
+	}
+}
+
+func TestHandler_ProceedsWhenFileFullyEmbedded(t *testing.T) {
+	t.Parallel()
+	lk := &fakeLookup{byPath: map[string][]string{"x.go": {"n1"}}}
+	linker := &fakeLinker{out: nil}
+	rdy := &fakeReadiness{pending: 0}
+	hh, herr := autolink.NewHandler(linker, lk, &fakeEdgeStore{}, &fakeFindingStore{},
+		autolink.WithEmbedReadiness(rdy))
+	h := mustHandler(t, hh, herr)
+
+	err := h.Handle(context.Background(), queue.Row{
+		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error with zero pending: %v", err)
+	}
+	if linker.calls != 1 {
+		t.Errorf("linker did not run on a ready row: calls=%d", linker.calls)
+	}
+}
+
+func TestHandler_ReadinessErrorWraps(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("boom-readiness")
+	lk := &fakeLookup{byPath: map[string][]string{"x.go": {"n1"}}}
+	rdy := &fakeReadiness{err: sentinel}
+	hh, herr := autolink.NewHandler(&fakeLinker{}, lk, &fakeEdgeStore{}, &fakeFindingStore{},
+		autolink.WithEmbedReadiness(rdy))
+	h := mustHandler(t, hh, herr)
+	err := h.Handle(context.Background(), queue.Row{
+		Kind: queue.WorkKindAutoLink, RepoID: "r1", Branch: "main", Payload: "x.go",
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected wrapped sentinel, got %v", err)
 	}
 }
 

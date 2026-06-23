@@ -356,6 +356,58 @@ func TestPoller_NoHandlerRowSkipped(t *testing.T) {
 	}
 }
 
+// TestPoller_DeferredRowReleasesWithoutBurningRetries pins the ErrDeferWork
+// contract: a handler that defers a row leaves it pending and untouched on the
+// retry budget, and the row is reprocessed once the handler stops deferring.
+// This is what lets the per-file embed gate hold a row across a slow embed
+// drain without ever exhausting its three attempts.
+func TestPoller_DeferredRowReleasesWithoutBurningRetries(t *testing.T) {
+	t.Parallel()
+
+	db := openTestDB(t)
+	seq := insertPendingRow(t, db, queue.WorkKindAutoLink)
+
+	var calls atomic.Int32
+	succeeded := make(chan struct{})
+	h := &handlerFunc{fn: func(_ context.Context, _ queue.Row) error {
+		// Defer the first two deliveries, then succeed.
+		if calls.Add(1) <= 2 {
+			return ports.ErrDeferWork
+		}
+		close(succeeded)
+		return nil
+	}}
+
+	handlers := map[queue.WorkKind]queue.WorkHandler{queue.WorkKindAutoLink: h}
+	p := queue.New(db, db, handlers, queue.WithInterval(10*time.Millisecond))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	p.Start(ctx)
+
+	select {
+	case <-succeeded:
+	case <-ctx.Done():
+		t.Fatalf("handler never succeeded after deferrals; calls=%d", calls.Load())
+	}
+
+	// attempts must read 1 (the single successful claim), not 3: each defer
+	// rolled back the attempt the CAS charged, so the budget was never spent.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		state, attempts := rowState(t, db, seq)
+		if state == "done" {
+			if attempts != 1 {
+				t.Errorf("deferred row burned retries: attempts=%d, want 1", attempts)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	state, attempts := rowState(t, db, seq)
+	t.Errorf("expected state=done, got state=%q attempts=%d", state, attempts)
+}
+
 // TestPoller_WikiLaneDrains verifies the WorkKindWiki lane: a pending wiki
 // row is picked up by its handler and transitions to state=done.
 func TestPoller_WikiLaneDrains(t *testing.T) {

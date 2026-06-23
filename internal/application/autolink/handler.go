@@ -40,6 +40,16 @@ type fileNodeLookup interface {
 	LookupNodes(ctx context.Context, repoID, branch string, nodeIDs []string) ([]ports.NodeMeta, error)
 }
 
+// embedReadiness reports how many of a file's nodes still have a pending
+// embedding. The Handler uses it to defer a row whose file is not fully
+// embedded yet, rather than running the vector search against a partial store
+// and silently under-linking the not-yet-embedded sources. Kept narrow so the
+// autolink package depends only on the one method it needs; sqlite's
+// EmbeddingRefsRepo satisfies it structurally.
+type embedReadiness interface {
+	PendingAmong(ctx context.Context, nodeIDs []string) (int, error)
+}
+
 // nonSymbolKinds are container / sub-symbol node kinds for which a
 // nearest-neighbor "similar to" link is noise: package and chunk nodes embed
 // near-identical boilerplate across files and flood the findings list
@@ -80,6 +90,13 @@ type Handler struct {
 	// junior's first 'findings list'. When the option
 	// is unset (older composition roots), behavior is unchanged.
 	repoKind func(ctx context.Context, repoID string) (string, error)
+
+	// readiness, when set, gates each row on its file being fully embedded:
+	// the handler returns ports.ErrDeferWork while any of the file's nodes are
+	// still pending, so the poller retries the row later instead of linking
+	// against a partial store. Unset leaves the handler running immediately,
+	// relying on an external lane-level gate for correctness.
+	readiness embedReadiness
 }
 
 // HandlerOption configures a Handler. None are required today; the type is
@@ -93,6 +110,15 @@ type HandlerOption func(*Handler)
 // of noise findings.
 func WithRepoKindLookup(fn func(ctx context.Context, repoID string) (string, error)) HandlerOption {
 	return func(h *Handler) { h.repoKind = fn }
+}
+
+// WithEmbedReadiness wires the per-file embed gate. With it set, Handle defers
+// a row (ports.ErrDeferWork) while any of the file's nodes are still pending an
+// embedding, so autolink runs each file against a vector store that already
+// holds that file's own sources. Without it, the handler relies on a
+// lane-level gate to hold autolink until the embed backlog drains.
+func WithEmbedReadiness(r embedReadiness) HandlerOption {
+	return func(h *Handler) { h.readiness = r }
 }
 
 // NewHandler constructs a Handler. All four collaborators are required; a nil
@@ -174,6 +200,23 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	}
 	if len(nodeIDs) == 0 {
 		return nil
+	}
+
+	// Defer the row while this file is still embedding. Autolink links a node by
+	// searching the vector store for its neighbors; a node whose own embedding
+	// is pending would be skipped with no retry, and a file that runs before its
+	// neighbors are embedded links against a partial store. Gating per file lets
+	// autolink overlap the embed drain while each file still sees its own
+	// sources. Checked before the metadata hydration below so a deferred row
+	// costs one COUNT, not a full lookup, each retry.
+	if h.readiness != nil {
+		pending, err := h.readiness.PendingAmong(ctx, nodeIDs)
+		if err != nil {
+			return fmt.Errorf("autolink.Handle: embed readiness for %q: %w", filePath, err)
+		}
+		if pending > 0 {
+			return ports.ErrDeferWork
+		}
 	}
 
 	sources, srcMeta, err := h.resolveSources(ctx, row, nodeIDs)
