@@ -222,47 +222,6 @@ func (b *daemonBuilder) openStorage() error {
 	return nil
 }
 
-// buildIngestionBusy installs the scan tracker and the shared ingestion-busy
-// predicate: the queue poller and embedder worker hold writes off while a
-// cold-scan or startup resync is committing, or while the host is under memory
-// pressure (both lanes skip their tick to let RAM recover instead of risking
-// OOM). resyncRef is filled in by finalize; the closure reads it through the
-// builder. avail is injected so tests can drive the memory-pressure branch.
-func (b *daemonBuilder) buildIngestionBusy(avail availMemFunc) {
-	b.scanTracker = application.NewScanTracker()
-	b.availMem = avail
-	floor := resolveFloorBytes(b.fileCfg.Storage.MemoryPressureFloorMiB)
-	// memPressure is the raw memory-pressure predicate, surfaced in
-	// eng_get_status so operators can see the deferral instead of guessing.
-	b.memPressure = func() bool { return underMemoryPressure(b.availMem, floor) }
-
-	// writeBusy: a cold scan or startup resync is holding the Write pool. The
-	// embedder skips its tick on this so it can't race the promotion Write tx
-	// into SQLITE_BUSY. It deliberately does NOT include memory pressure -
-	// pausing embedding does not free the resident memvec index or the cold-scan
-	// working set (the real RAM hogs), it only stalls semantic search
-	// indefinitely on a memory-tight host (solov2-b5aw). Embedding is bounded per
-	// batch, so it drains regardless of memory pressure.
-	b.writeBusy = func() bool {
-		if b.scanTracker.IsAnyScanRunning() {
-			return true
-		}
-		return b.resyncRef != nil && b.resyncRef.IsSyncing()
-	}
-
-	// ingestionBusy adds the memory-pressure guard on top of writeBusy, and gates
-	// only the DEFERRABLE post-promotion queue lanes (auto_link/fts/revalidate).
-	// The pressureGate logs the rising/falling edge so the throttle is no longer
-	// a silent, undiagnosable stall.
-	gate := newPressureGate(b.availMem, floor, slog.Default())
-	b.ingestionBusy = func() bool {
-		if b.writeBusy() {
-			return true
-		}
-		return gate.busy()
-	}
-}
-
 // buildCore wires the shared ingestion+promotion core (internal/composition),
 // the finding storage, and the git-diff AddedLines seam.
 func (b *daemonBuilder) buildCore() error {
