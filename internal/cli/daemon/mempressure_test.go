@@ -107,8 +107,12 @@ func TestPressureGate_LogsEdges(t *testing.T) {
 	avail := pressureFloorBytes - 1 // start under pressure
 	gate := newPressureGate(func() (uint64, bool) { return avail, true }, pressureFloorBytes, logger)
 
-	if !gate.busy() || !gate.busy() {
-		t.Fatalf("expected busy=true while under the floor")
+	// Two ticks under the floor: both report busy, but the WARN fires only once.
+	if !gate.busy() {
+		t.Fatalf("expected busy=true under the floor (first tick)")
+	}
+	if !gate.busy() {
+		t.Fatalf("expected busy=true under the floor (second tick)")
 	}
 	if c := strings.Count(buf.String(), "memory pressure - deferring"); c != 1 {
 		t.Fatalf("expected exactly one rising-edge WARN across two ticks, got %d; log=%q", c, buf.String())
