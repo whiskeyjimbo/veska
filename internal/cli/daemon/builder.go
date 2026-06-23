@@ -68,6 +68,7 @@ type daemonBuilder struct {
 	scanTracker      *application.ScanTracker
 	resyncRef        *application.StartupResync
 	ingestionBusy    func() bool
+	writeBusy        func() bool
 	availMem         availMemFunc
 	embedderIsOllama bool
 
@@ -229,14 +230,31 @@ func (b *daemonBuilder) openStorage() error {
 func (b *daemonBuilder) buildIngestionBusy(avail availMemFunc) {
 	b.scanTracker = application.NewScanTracker()
 	b.availMem = avail
-	b.ingestionBusy = func() bool {
+
+	// writeBusy: a cold scan or startup resync is holding the Write pool. The
+	// embedder skips its tick on this so it can't race the promotion Write tx
+	// into SQLITE_BUSY. It deliberately does NOT include memory pressure -
+	// pausing embedding does not free the resident memvec index or the cold-scan
+	// working set (the real RAM hogs), it only stalls semantic search
+	// indefinitely on a memory-tight host (solov2-b5aw). Embedding is bounded per
+	// batch, so it drains regardless of memory pressure.
+	b.writeBusy = func() bool {
 		if b.scanTracker.IsAnyScanRunning() {
 			return true
 		}
-		if b.resyncRef != nil && b.resyncRef.IsSyncing() {
+		return b.resyncRef != nil && b.resyncRef.IsSyncing()
+	}
+
+	// ingestionBusy adds the memory-pressure guard on top of writeBusy, and gates
+	// only the DEFERRABLE post-promotion queue lanes (auto_link/fts/revalidate).
+	// The pressureGate logs the rising/falling edge so the throttle is no longer
+	// a silent, undiagnosable stall.
+	gate := newPressureGate(b.availMem, slog.Default())
+	b.ingestionBusy = func() bool {
+		if b.writeBusy() {
 			return true
 		}
-		return underMemoryPressure(b.availMem)
+		return gate.busy()
 	}
 }
 
@@ -353,7 +371,10 @@ func (b *daemonBuilder) buildEmbedder() error {
 	worker, err := embedder.NewWorker(b.refs, b.provider, b.vec,
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
 		embedder.WithMetrics(b.metrics),
-		embedder.WithPauser(b.ingestionBusy),
+		// writeBusy, not ingestionBusy: the embedder pauses only to avoid racing
+		// the promotion Write tx (scan/resync), never on memory pressure - that
+		// silent indefinite pause was solov2-b5aw.
+		embedder.WithPauser(b.writeBusy),
 	)
 	if err != nil {
 		return fmt.Errorf("daemon: embedder worker: %w", err)
