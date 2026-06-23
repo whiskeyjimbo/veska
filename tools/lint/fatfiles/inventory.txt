@@ -20,9 +20,9 @@
 #     for a missing file is itself a failure).
 #
 # Blank lines and `#` comments are ignored.
-internal/application/embedder/embedder.go 530
+internal/application/embedder/embedder.go 504
 internal/application/search/search.go 593
-internal/cli/daemon/builder.go 755
+internal/cli/daemon/builder.go 751
 internal/cli/daemon/wire.go 363
 internal/infrastructure/mcp/registry.go 454
 internal/infrastructure/mcp/tools_helpers.go 527
@@ -30,7 +30,7 @@ internal/infrastructure/repo/registry.go 446
 internal/infrastructure/secretsscanner/secretsscanner.go 571
 internal/infrastructure/sqlite/graph_repo.go 380
 internal/infrastructure/sqlite/promotion_callresolve.go 404
-internal/infrastructure/sqlite/promotion_store.go 541
+internal/infrastructure/sqlite/promotion_store.go 501
 internal/infrastructure/treesitter/go_query.go 738
 internal/infrastructure/treesitter/ts.go 521
 internal/infrastructure/vulnsource/osv/osv.go 560
