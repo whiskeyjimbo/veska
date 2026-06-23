@@ -314,6 +314,15 @@ eval-recall:
 eval-usearch-ab:
 	USEARCH_AB_SCALE=$${USEARCH_AB_SCALE:-1} $(SQLITE_CGO_ENV) go test -tags "eval hnsw_native $(SQLITE_TAGS)" -run TestUsearchAB ./tools/loadtest/usearchab/ -v -count=1 -timeout 30m
 
+# eval-backend-matrix: memvec-vs-usearch metrics table across a slate of Go repos
+# of different sizes (for the manual). Indexes each repo into an isolated home
+# (usearch + model2vec) then compares both backends per repo: build time, query
+# latency, autolink recall, RAM. Re-run after any backend/quantization/embedder
+# change. Clones cached; pass ARGS=--reindex to rebuild. Run on a quiet box.
+# Output: /tmp/backend-matrix.md. See tools/loadtest/usearchab/backend-matrix.sh.
+eval-backend-matrix:
+	./tools/loadtest/usearchab/backend-matrix.sh $(ARGS)
+
 # eval-recall-projection: recall@10 + p95 sweep over embed-text PROJECTION
 # variants (baseline / +signature / +snippet / +both). The corpus is built
 # from node-shaped inputs run through the production domain.EmbedText
