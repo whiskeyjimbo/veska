@@ -31,7 +31,7 @@ type indexKey struct {
 }
 
 // rowMeta stores the Go-side metadata associated with each usearch slot. The original
-// float32 vector is omitted because usearch maintains its own float16-quantized copy;
+// float32 vector is omitted because usearch maintains its own copy;
 // keeping a duplicate copy in Go memory would double the per-vector RSS without benefit.
 type rowMeta struct {
 	NodeID      string
@@ -51,9 +51,15 @@ type indexEntry struct {
 
 func newIndexEntry() (*indexEntry, error) {
 	conf := usearchlib.IndexConfig{
-		Dimensions:      indexDim,
-		Metric:          usearchlib.L2sq,
-		Quantization:    usearchlib.F16,
+		Dimensions: indexDim,
+		Metric:     usearchlib.L2sq,
+		// F32, not F16: measured on the real graph, F16's per-insert quantization
+		// made the index build ~8x slower (20.8s vs 2.6s at ~13k nodes) and lowered
+		// autolink recall vs the exact memvec oracle (0.9992 -> 0.9995 going F16->F32).
+		// F16's only win was ~2x less index RAM - a non-issue below the 75k
+		// YellowThreshold (memvec already holds float32). Revisit F16 only at
+		// multi-million-vector scale.
+		Quantization:    usearchlib.F32,
 		Connectivity:    indexConnectivity,
 		ExpansionAdd:    indexExpansionAdd,
 		ExpansionSearch: indexExpansionSearch,
@@ -106,7 +112,7 @@ func (e *indexEntry) upsert(row domain.EmbeddingRow) error {
 }
 
 // UsearchStore implements the VectorStorage interface using separate, in-memory usearch
-// HNSW indexes partitioned by repository, branch, and model. It uses float16 quantization
+// HNSW indexes partitioned by repository, branch, and model. It uses float32 storage
 // and is safe for concurrent access.
 type UsearchStore struct {
 	mu      sync.RWMutex
