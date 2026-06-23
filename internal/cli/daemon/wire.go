@@ -343,6 +343,9 @@ type mcpDeps struct {
 	// scanTracker surfaces in-flight cold scans to eng_get_status
 	// Nil-safe - statusProvider tolerates a nil tracker.
 	scanTracker *application.ScanTracker
+	// memPressure reports whether the deferrable queue lanes are currently
+	// throttled for low memory, surfaced in eng_get_status. Nil-safe.
+	memPressure func() bool
 	// reconciler surfaces in-flight per-repo wake sweeps so graph read tools
 	// can attach a wake_reconciling degraded reason. It
 	// satisfies mcp.ReconcileReader. Nil-safe - the helper no-ops on nil.

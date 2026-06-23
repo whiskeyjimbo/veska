@@ -20,11 +20,22 @@ func fakeAvail(bytesAvail uint64, ok bool) func() (uint64, bool) {
 // TestUnderMemoryPressure_BelowFloor pins: the predicate reports pressure when
 // available RAM is below the runtime pressure floor, and no pressure above it.
 func TestUnderMemoryPressure_BelowFloor(t *testing.T) {
-	if !underMemoryPressure(fakeAvail(pressureFloorBytes-1, true)) {
-		t.Fatalf("expected pressure when avail < pressureFloorBytes")
+	if !underMemoryPressure(fakeAvail(pressureFloorBytes-1, true), pressureFloorBytes) {
+		t.Fatalf("expected pressure when avail < floor")
 	}
-	if underMemoryPressure(fakeAvail(pressureFloorBytes+1, true)) {
-		t.Fatalf("expected no pressure when avail > pressureFloorBytes")
+	if underMemoryPressure(fakeAvail(pressureFloorBytes+1, true), pressureFloorBytes) {
+		t.Fatalf("expected no pressure when avail > floor")
+	}
+}
+
+// TestResolveFloorBytes pins the config override: a positive MiB value wins; 0
+// or negative falls back to the built-in default.
+func TestResolveFloorBytes(t *testing.T) {
+	if got := resolveFloorBytes(256); got != 256<<20 {
+		t.Fatalf("resolveFloorBytes(256) = %d, want %d", got, 256<<20)
+	}
+	if got := resolveFloorBytes(0); got != pressureFloorBytes {
+		t.Fatalf("resolveFloorBytes(0) = %d, want default %d", got, pressureFloorBytes)
 	}
 }
 
@@ -32,10 +43,10 @@ func TestUnderMemoryPressure_BelowFloor(t *testing.T) {
 // unsupported (ok=false) or nil, the predicate degrades to a no-op (false), so
 // non-linux platforms never pause.
 func TestUnderMemoryPressure_UnsupportedIsNoOp(t *testing.T) {
-	if underMemoryPressure(fakeAvail(0, false)) {
+	if underMemoryPressure(fakeAvail(0, false), pressureFloorBytes) {
 		t.Fatalf("unsupported reader must not report pressure")
 	}
-	if underMemoryPressure(nil) {
+	if underMemoryPressure(nil, pressureFloorBytes) {
 		t.Fatalf("nil reader must not report pressure")
 	}
 }
@@ -94,7 +105,7 @@ func TestPressureGate_LogsEdges(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	avail := pressureFloorBytes - 1 // start under pressure
-	gate := newPressureGate(func() (uint64, bool) { return avail, true }, logger)
+	gate := newPressureGate(func() (uint64, bool) { return avail, true }, pressureFloorBytes, logger)
 
 	if !gate.busy() || !gate.busy() {
 		t.Fatalf("expected busy=true while under the floor")

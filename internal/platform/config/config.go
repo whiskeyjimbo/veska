@@ -130,6 +130,14 @@ type StorageConfig struct {
 	IdleCheckpointAfter string `toml:"idle_checkpoint_after"`
 	VectorBackend       string `toml:"vector_backend"`
 
+	// MemoryPressureFloorMiB is the available-RAM floor (MiB) below which the
+	// daemon defers its deferrable post-promotion queue lanes (auto_link/fts/
+	// revalidate) to avoid OOM with the in-memory `memvec` backend. The embedder
+	// is NOT throttled by this (it drains regardless; solov2-b5aw). 0 uses the
+	// built-in default (512 MiB). Lower it on hosts with little headroom that
+	// still want the lanes to run.
+	MemoryPressureFloorMiB int `toml:"memory_pressure_floor_mib"`
+
 	// VerifyMigrationIntegrity gates the schema-tamper check that compares each
 	// applied migration's SHA against the embedded SQL. Off by default for now -
 	// the check is brittle (a comment edit in an already-applied migration trips

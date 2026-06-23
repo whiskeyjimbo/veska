@@ -110,6 +110,10 @@ journal_mode           = "WAL"               # do not change
 synchronous            = "FULL"              # "FULL" (default) | "NORMAL".
 wal_autocheckpoint     = 1000                # pages
 idle_checkpoint_after  = "5s"
+memory_pressure_floor_mib = 512              # defer deferrable queue lanes (auto_link/
+                                             # fts/revalidate) when free RAM is below
+                                             # this. 0 = built-in default (512). The
+                                             # embedder is NOT throttled by this.
 audit_max_size_mb      = 100
 audit_keep_files       = 5
 
