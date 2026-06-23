@@ -8,12 +8,19 @@ package queue
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/platform/pollloop"
 )
+
+// deferBackoffSecs is how long a deferred row stays unavailable before the
+// poller reconsiders it. One second keeps re-check CPU negligible while staying
+// well under the tens-of-seconds embed drain it waits on; finer granularity
+// buys nothing since available_at is stored in whole Unix seconds.
+const deferBackoffSecs = 1
 
 // WorkKind / WorkKind* / Row / WorkHandler are aliases of the canonical
 // types defined in the ports layer. They live here too for backwards
@@ -216,6 +223,19 @@ func (p *Poller) processOne(ctx context.Context, kind WorkKind, handler WorkHand
 	handlerErr := handler.Handle(ctx, *row)
 
 	now := time.Now().Unix()
+	if errors.Is(handlerErr, ports.ErrDeferWork) {
+		// Precondition not met (not a failure): hold the row until available_at
+		// and undo the attempt the CAS just charged, so a row waiting on a slow
+		// precondition never exhausts its retry budget. The lane keeps draining
+		// other ready rows in the meantime.
+		if _, err = p.writeDB.ExecContext(ctx,
+			`UPDATE post_promotion_queue SET state='pending', attempts=attempts-1, available_at=? WHERE seq=?`,
+			now+deferBackoffSecs, row.Seq,
+		); err != nil {
+			slog.Warn("post-promotion queue: defer row failed", "work_kind", kind, "seq", row.Seq, "err", err)
+		}
+		return true
+	}
 	if handlerErr == nil {
 		// Step 4a: success.
 		if _, err = p.writeDB.ExecContext(ctx,
@@ -253,10 +273,10 @@ func (p *Poller) fetchPending(ctx context.Context, kind WorkKind) (*Row, error) 
 	err := p.readDB.QueryRowContext(ctx, `
 		SELECT seq, promotion_id, repo_id, branch, git_sha, work_kind, payload, state, attempts, enqueued_at
 		FROM post_promotion_queue
-		WHERE state='pending' AND work_kind=?
+		WHERE state='pending' AND work_kind=? AND available_at<=?
 		ORDER BY seq
 		LIMIT 1`,
-		string(kind),
+		string(kind), time.Now().Unix(),
 	).Scan(
 		&r.Seq, &r.PromotionID, &r.RepoID, &r.Branch, &r.GitSHA,
 		&r.Kind, &r.Payload, &r.State, &r.Attempts, &r.EnqueuedAt,

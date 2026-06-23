@@ -2,7 +2,17 @@
 
 package ports
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrDeferWork is returned by a WorkHandler when a row cannot be processed yet
+// but is NOT a failure: a transient precondition (e.g. the file's embeddings
+// are still pending) is unmet. The poller re-queues the row with a short
+// availability delay WITHOUT consuming its retry budget, so the row is retried
+// later instead of busy-looping or failing permanently.
+var ErrDeferWork = errors.New("queue: work deferred, precondition not yet met")
 
 // WorkKind identifies the type of post-promotion work. The values mirror the
 // database column in post_promotion_queue.
