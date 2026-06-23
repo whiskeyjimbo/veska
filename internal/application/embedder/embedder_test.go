@@ -180,7 +180,8 @@ func (s *fakeVectorStore) Search(context.Context, string, string, []float32, int
 	return nil, nil
 }
 
-func (s *fakeVectorStore) Reindex(context.Context, string, string) error { return nil }
+func (s *fakeVectorStore) DeleteNodes(context.Context, string, string, []string) error { return nil }
+func (s *fakeVectorStore) Reindex(context.Context, string, string) error               { return nil }
 
 func (s *fakeVectorStore) LookupContentHashes(context.Context, string, string, []string) (map[string]string, error) {
 	return nil, nil

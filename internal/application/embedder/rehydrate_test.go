@@ -130,4 +130,5 @@ func (s *spyVector) LookupContentHashes(context.Context, string, string, []strin
 	return nil, nil
 }
 
-func (s *spyVector) Reindex(context.Context, string, string) error { return nil }
+func (s *spyVector) DeleteNodes(context.Context, string, string, []string) error { return nil }
+func (s *spyVector) Reindex(context.Context, string, string) error               { return nil }

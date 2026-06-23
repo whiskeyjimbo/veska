@@ -34,6 +34,7 @@ type ColdScanCore struct {
 type coldScanCoreConfig struct {
 	reviewEnabled  bool
 	summaryEnabled bool
+	vectorPruner   func(ctx context.Context, repoID, branch string, nodeIDs []string) error
 }
 
 type ColdScanCoreOption func(*coldScanCoreConfig)
@@ -46,6 +47,12 @@ func WithReviewEnabled(enabled bool) ColdScanCoreOption {
 // WithSummaryEnabled enables the summary lane for the cold-scan core's promotion store.
 func WithSummaryEnabled(enabled bool) ColdScanCoreOption {
 	return func(c *coldScanCoreConfig) { c.summaryEnabled = enabled }
+}
+
+// WithVectorPruner wires the post-commit eviction of dropped nodes' vectors,
+// typically VectorStorage.DeleteNodes. Unset on the CLI path (no live vector store).
+func WithVectorPruner(fn func(ctx context.Context, repoID, branch string, nodeIDs []string) error) ColdScanCoreOption {
+	return func(c *coldScanCoreConfig) { c.vectorPruner = fn }
 }
 
 func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOption, promoterOpts []application.PromoterOption, opts ...ColdScanCoreOption) *ColdScanCore {
@@ -68,6 +75,7 @@ func NewColdScanCore(pools *sqlite.Pools, ingesterOpts []application.IngesterOpt
 		},
 		sqlite.WithReviewEnabled(cfg.reviewEnabled),
 		sqlite.WithSummaryEnabled(cfg.summaryEnabled),
+		sqlite.WithVectorPruner(cfg.vectorPruner),
 	)
 	promoter := application.NewPromoter(area, promotionStore, promoterOpts...)
 

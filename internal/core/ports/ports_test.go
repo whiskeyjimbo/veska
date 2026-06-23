@@ -106,7 +106,8 @@ func (s *stubVectorStorage) UpsertEmbeddings(_ context.Context, _, _ string, _ [
 func (s *stubVectorStorage) Search(_ context.Context, _, _ string, _ []float32, _ int, _ domain.VectorFilter) ([]domain.SearchHit, error) {
 	return nil, nil
 }
-func (s *stubVectorStorage) Reindex(_ context.Context, _, _ string) error { return nil }
+func (s *stubVectorStorage) DeleteNodes(context.Context, string, string, []string) error { return nil }
+func (s *stubVectorStorage) Reindex(_ context.Context, _, _ string) error                { return nil }
 func (s *stubVectorStorage) LookupContentHashes(_ context.Context, _, _ string, _ []string) (map[string]string, error) {
 	return nil, nil
 }

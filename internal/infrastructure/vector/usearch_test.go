@@ -75,6 +75,44 @@ func TestUpsertAndLookup(t *testing.T) {
 }
 
 // TestSearch verifies that searching the store returns the requested number of nearest neighbor hits with non-negative similarity scores.
+// TestDeleteNodesRemovesFromSearch is the usearch half of solov2-524u: a
+// deleted node must stop surfacing in Search and LookupContentHashes.
+func TestDeleteNodesRemovesFromSearch(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	batch := []domain.EmbeddingRow{
+		{NodeID: "keep", ContentHash: "hk", ModelID: "nomic-embed-text", Vector: randVec(1)},
+		{NodeID: "drop", ContentHash: "hd", ModelID: "nomic-embed-text", Vector: randVec(2)},
+	}
+	if err := store.UpsertEmbeddings(ctx, "repo-1", "main", batch); err != nil {
+		t.Fatalf("UpsertEmbeddings: %v", err)
+	}
+
+	if err := store.DeleteNodes(ctx, "repo-1", "main", []string{"drop"}); err != nil {
+		t.Fatalf("DeleteNodes: %v", err)
+	}
+
+	hits, err := store.Search(ctx, "repo-1", "main", randVec(2), 5, domain.VectorFilter{ModelID: "nomic-embed-text"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	for _, h := range hits {
+		if h.NodeID == "drop" {
+			t.Fatalf("drop still searchable after DeleteNodes: %+v", hits)
+		}
+	}
+	hashes, err := store.LookupContentHashes(ctx, "repo-1", "main", []string{"keep", "drop"})
+	if err != nil {
+		t.Fatalf("LookupContentHashes: %v", err)
+	}
+	if _, ok := hashes["drop"]; ok {
+		t.Fatalf("drop content hash still present after DeleteNodes")
+	}
+	if _, ok := hashes["keep"]; !ok {
+		t.Fatalf("keep wrongly removed by DeleteNodes(drop)")
+	}
+}
+
 func TestSearch(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
