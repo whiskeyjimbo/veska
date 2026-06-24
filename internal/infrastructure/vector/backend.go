@@ -20,7 +20,36 @@ const (
 
 	// BackendUsearch selects the HNSW vector backend, requiring libusearch_c.so at runtime.
 	BackendUsearch BackendKind = "usearch"
+
+	// BackendAuto defers the choice to ElectVectorBackend: usearch for large
+	// graphs (when compiled in), memvec otherwise. It must be resolved to a
+	// concrete kind before reaching NewVectorStorage.
+	BackendAuto BackendKind = "auto"
 )
+
+// AutoElectThreshold is the per-(repo,branch) ready-vector count at or above
+// which BackendAuto elects usearch over memvec. Rationale: memvec autolink is
+// O(n^2) (one query/node x O(n) linear scan) while embedding is O(n); the two
+// cross near ~12K nodes, so above this autolink dominates and grows
+// quadratically. usearch's O(log n) search is net-faster end-to-end from here up
+// (measured ~0.999 recall, query p95 2-4x faster; see eval-usearch-ab). 10K sits
+// at the knee with margin. Distinct from memvec.YellowThreshold (75K), the harder
+// "memvec strained" line.
+const AutoElectThreshold = 10_000
+
+// ElectVectorBackend resolves the concrete backend to use. An explicit
+// memory/usearch choice is returned unchanged. BackendAuto elects usearch only
+// when the largest single (repo,branch) index is at/above AutoElectThreshold AND
+// usearch is compiled in; otherwise memvec. The result is never BackendAuto.
+func ElectVectorBackend(configured BackendKind, maxRepoVectors int, usearchAvailable bool) BackendKind {
+	if configured != BackendAuto {
+		return configured
+	}
+	if usearchAvailable && maxRepoVectors >= AutoElectThreshold {
+		return BackendUsearch
+	}
+	return BackendMemory
+}
 
 // Options carries usearch HNSW build tunables resolved from the storage config
 // profile. It is backend-agnostic so the config/builder layer can

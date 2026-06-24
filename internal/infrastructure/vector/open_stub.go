@@ -11,3 +11,7 @@ import "github.com/whiskeyjimbo/veska/internal/core/ports"
 func openNative(_ string, _ Options) (ports.VectorStorage, error) {
 	return nil, ErrVectorStoreUnavailable
 }
+
+// UsearchAvailable reports whether the usearch backend is compiled in. False in
+// this stub build (no hnsw_native tag), so BackendAuto never elects usearch.
+func UsearchAvailable() bool { return false }

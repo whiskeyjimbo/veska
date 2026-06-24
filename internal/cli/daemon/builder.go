@@ -162,12 +162,12 @@ func (b *daemonBuilder) validateConfig() error {
 		return err
 	}
 	switch b.cfg.VectorBackend {
-	case vector.BackendMemory, vector.BackendUsearch:
+	case vector.BackendMemory, vector.BackendUsearch, vector.BackendAuto:
 	default:
 		return &ErrMissingDep{
 			Name: "vector_backend",
-			Why: fmt.Sprintf("unknown VESKA_VECTOR_BACKEND %q (want %q or %q)",
-				b.cfg.VectorBackend, vector.BackendMemory, vector.BackendUsearch),
+			Why: fmt.Sprintf("unknown VESKA_VECTOR_BACKEND %q (want %q, %q, or %q)",
+				b.cfg.VectorBackend, vector.BackendMemory, vector.BackendUsearch, vector.BackendAuto),
 		}
 	}
 	if b.cfg.SQLitePath == "" {
@@ -209,23 +209,71 @@ func (b *daemonBuilder) openStorage() error {
 
 	b.buildIngestionBusy(defaultAvailMem)
 
+	// Resolve BackendAuto now that the DB is migrated and queryable: elect
+	// usearch when an already-indexed (repo,branch) is large enough to benefit
+	// (and usearch is compiled in), else memvec. An explicit backend passes
+	// through unchanged. NOTE: this is a startup decision keyed on what is
+	// ALREADY indexed - a fresh repo's first cold scan still runs on memvec; the
+	// election takes effect on the next boot once it crosses the threshold.
+	maxRepoVec := b.maxRepoVectorCount()
+	backend := vector.ElectVectorBackend(b.cfg.VectorBackend, maxRepoVec, vector.UsearchAvailable())
+	if b.cfg.VectorBackend == vector.BackendAuto {
+		slog.Info("daemon: vector backend auto-elected", "backend", backend,
+			"max_repo_vectors", maxRepoVec, "threshold", vector.AutoElectThreshold)
+	}
+
 	// One-shot startup advisory: warn when the in-memory vector backend is
 	// elected on a low-RAM host, since memvec keeps every vector in RAM.
 	// Mirrors the static-embedder WARN in electEmbedder.
-	maybeWarnLowMemory(b.cfg.VectorBackend, b.availMem, slog.Default())
+	maybeWarnLowMemory(backend, b.availMem, slog.Default())
 
 	vecOpts, err := vector.OptionsForProfile(b.fileCfg.Storage.UsearchIndexProfile)
 	if err != nil {
 		_ = pools.Close()
 		return fmt.Errorf("daemon: vector storage: %w", err)
 	}
-	vec, err := vector.NewVectorStorage(b.cfg.VectorBackend, b.cfg.VeskaHome, vecOpts...)
+	vec, err := vector.NewVectorStorage(backend, b.cfg.VeskaHome, vecOpts...)
+	if err != nil && b.cfg.VectorBackend == vector.BackendAuto && backend == vector.BackendUsearch {
+		// Auto-elected usearch but it failed to open (e.g. libusearch_c.so not on
+		// the loader path). Auto must never brick the daemon - degrade to memvec.
+		// An EXPLICIT usearch choice still hard-fails below, as before.
+		slog.Warn("daemon: auto-elected usearch failed to open, falling back to memory backend",
+			"err", err, "max_repo_vectors", maxRepoVec)
+		backend = vector.BackendMemory
+		vec, err = vector.NewVectorStorage(backend, b.cfg.VeskaHome, vecOpts...)
+	}
 	if err != nil {
 		_ = pools.Close()
 		return fmt.Errorf("daemon: open vector storage: %w", err)
 	}
+	// Write the resolved backend back so assemble() propagates it to the Daemon
+	// and eng_get_config reports the concrete backend, not "auto".
+	b.cfg.VectorBackend = backend
 	b.vec = vec
 	return nil
+}
+
+// maxRepoVectorCount returns the ready-vector population of the largest single
+// (repo,branch) index - the value that drives memvec's per-query linear-scan
+// cost and usearch's per-index build. Mirrors the rehydrate bucketing
+// (LoadReadyEmbeddings). COALESCE keeps it one row (0) on an empty graph; a
+// query error degrades to 0 (memvec), never blocks startup.
+func (b *daemonBuilder) maxRepoVectorCount() int {
+	var n int
+	err := b.pools.ReadDB.QueryRow(`
+		SELECT COALESCE(MAX(c), 0) FROM (
+			SELECT COUNT(*) AS c
+			FROM node_embedding_refs r
+			JOIN nodes n           ON n.node_id = r.node_id
+			JOIN node_embeddings e ON e.content_hash = r.content_hash
+			WHERE r.state = 'ready' AND r.content_hash IS NOT NULL
+			GROUP BY n.repo_id, n.branch
+		)`).Scan(&n)
+	if err != nil {
+		slog.Warn("daemon: vector backend auto-elect: count failed, assuming memory", "err", err)
+		return 0
+	}
+	return n
 }
 
 // buildCore wires the shared ingestion+promotion core (internal/composition),

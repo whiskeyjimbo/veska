@@ -113,7 +113,9 @@ func ResolveConfig(c Config) Config {
 		if env := os.Getenv("VESKA_VECTOR_BACKEND"); env != "" {
 			c.VectorBackend = vector.BackendKind(env)
 		} else {
-			c.VectorBackend = vector.BackendMemory
+			// Unset => auto: openStorage elects usearch for large graphs (when
+			// compiled in), memvec otherwise. An explicit env value is honored.
+			c.VectorBackend = vector.BackendAuto
 		}
 	}
 	if c.OllamaURL == "" {

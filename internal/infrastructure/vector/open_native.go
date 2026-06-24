@@ -23,3 +23,8 @@ func openNative(veskaHome string, opts Options) (ports.VectorStorage, error) {
 	}
 	return store, nil
 }
+
+// UsearchAvailable reports whether the usearch backend is compiled in. True in
+// this native build (hnsw_native tag); a missing libusearch_c.so still surfaces
+// at Open time, which BackendAuto handles by falling back to memvec.
+func UsearchAvailable() bool { return true }

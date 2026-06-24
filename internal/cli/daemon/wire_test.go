@@ -208,8 +208,10 @@ func TestResolveConfig_AppliesDefaults(t *testing.T) {
 	if got.MCPSockPath == "" {
 		t.Error("MCPSockPath empty after resolve")
 	}
-	if got.VectorBackend != vector.BackendMemory {
-		t.Errorf("VectorBackend = %q; want %q", got.VectorBackend, vector.BackendMemory)
+	// Unset VESKA_VECTOR_BACKEND now resolves to BackendAuto; openStorage elects
+	// the concrete backend (memvec/usearch) once the DB is queryable.
+	if got.VectorBackend != vector.BackendAuto {
+		t.Errorf("VectorBackend = %q; want %q", got.VectorBackend, vector.BackendAuto)
 	}
 	// EmbedModel is intentionally NOT defaulted daemon-wide anymore: it
 	// only matters when the elected embedder is Ollama, and elect supplies
