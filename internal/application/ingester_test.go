@@ -134,7 +134,7 @@ func TestIngester_Save_ParseErrorIsNonFatal(t *testing.T) {
 	}
 }
 
-func TestIngester_DeleteFile_RemovesFromStaging(t *testing.T) {
+func TestIngester_DeleteFile_StagesTombstone(t *testing.T) {
 	parser := &stubParser{
 		result: &domain.ParseResult{Nodes: []*domain.Node{{}}, Edges: nil},
 	}
@@ -143,16 +143,21 @@ func TestIngester_DeleteFile_RemovesFromStaging(t *testing.T) {
 
 	ing.Save(context.Background(), "repo1", "main", "del.go", []byte("package x"))
 
-	_, staged := area.GetStagedNodes("repo1", "main", "del.go")
-	if !staged {
-		t.Fatal("expected file to be staged before delete")
+	nodes, staged := area.GetStagedNodes("repo1", "main", "del.go")
+	if !staged || len(nodes) == 0 {
+		t.Fatal("expected file to be staged with nodes before delete")
 	}
 
-	ing.DeleteFile("repo1", "main", "del.go")
+	ing.DeleteFile(context.Background(), "repo1", "main", "del.go")
 
-	_, staged = area.GetStagedNodes("repo1", "main", "del.go")
-	if staged {
-		t.Fatal("expected file to be removed from staging after DeleteFile")
+	// A delete stages a tombstone: the path stays in staging (so promotion
+	// processes it and deletes the file's DB nodes) but with zero nodes.
+	nodes, staged = area.GetStagedNodes("repo1", "main", "del.go")
+	if !staged {
+		t.Fatal("expected tombstone entry to remain staged after DeleteFile")
+	}
+	if len(nodes) != 0 {
+		t.Fatalf("expected tombstone to have zero nodes, got %d", len(nodes))
 	}
 }
 

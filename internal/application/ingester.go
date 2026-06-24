@@ -129,6 +129,17 @@ func (ing *Ingester) save(ctx context.Context, repoID, branch, path string, src 
 	ing.emitter.Todos(ctx, repoID, branch, path, result.Todos)
 }
 
-func (ing *Ingester) DeleteFile(repoID, branch, path string) {
-	ing.staging.DeleteStagedFile(repoID, branch, path)
+// DeleteFile stages a tombstone (an empty parse result) for a removed file so
+// the next promotion runs its normal per-file replace path: it deletes the
+// file's existing nodes/edges, prunes their vectors, and clears their FTS rows.
+// Staging an empty entry - rather than dropping the path from staging - is what
+// makes the deletion reach the database; a bare staging removal would leave the
+// gone file's nodes (and embeddings) orphaned in the graph until a full re-scan.
+// Any parse-failure finding for the path is cleared too, since the file no
+// longer exists to re-parse.
+func (ing *Ingester) DeleteFile(ctx context.Context, repoID, branch, path string) {
+	ing.gate.WaitIfPaused()
+	gen := ing.gate.Generation()
+	ing.staging.Stage(repoID, branch, path, staging.File{}, staging.WithGenerationGuard(gen, ing.gate))
+	ing.emitter.ClearParseFailure(ctx, repoID, branch, path)
 }
