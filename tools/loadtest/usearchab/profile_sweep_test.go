@@ -40,6 +40,7 @@ package usearchab
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -150,7 +151,53 @@ func TestProfileSweep(t *testing.T) {
 	if err := os.WriteFile(out, []byte(table), 0o644); err != nil {
 		t.Fatalf("write table: %v", err)
 	}
-	t.Logf("profile sweep written to %s", out)
+	writeProfileJSON(t, "/tmp/usearch-profile-sweep.json", results, cores)
+	t.Logf("profile sweep written to %s (+ .json)", out)
+}
+
+// jsonRow is one (cell, bucket) result flattened for the grapher.
+type jsonRow struct {
+	Profile      string  `json:"profile"`
+	Threads      uint    `json:"threads"`
+	EF           uint    `json:"ef"`
+	Repo         string  `json:"repo"`
+	Branch       string  `json:"branch"`
+	Nodes        int     `json:"nodes"`
+	Runs         int     `json:"runs"`
+	RecallMin    float64 `json:"recall_min"`
+	RecallMed    float64 `json:"recall_med"`
+	RecallMax    float64 `json:"recall_max"`
+	BuildSecsMin float64 `json:"build_secs_min"`
+	BuildSecsMed float64 `json:"build_secs_med"`
+	BuildSecsMax float64 `json:"build_secs_max"`
+}
+
+// writeProfileJSON emits the per-(cell,bucket) results as JSON so the curve can
+// be graphed (build-time-vs-N and recall-vs-N per profile) without re-parsing
+// the markdown table.
+func writeProfileJSON(t *testing.T, path string, results []cellResult, cores int) {
+	rows := make([]jsonRow, 0, len(results))
+	for _, r := range results {
+		mnR, mdR, mxR := minMedMax(r.recalls)
+		mnB, mdB, mxB := minMedMax(r.buildSecs)
+		rows = append(rows, jsonRow{
+			Profile: r.cell.label(), Threads: r.cell.threads, EF: r.cell.ef,
+			Repo: shortRepo(r.repo), Branch: r.branch, Nodes: r.nodes, Runs: len(r.recalls),
+			RecallMin: mnR, RecallMed: mdR, RecallMax: mxR,
+			BuildSecsMin: mnB, BuildSecsMed: mdB, BuildSecsMax: mxB,
+		})
+	}
+	payload := struct {
+		Cores int       `json:"gomaxprocs"`
+		Rows  []jsonRow `json:"rows"`
+	}{Cores: cores, Rows: rows}
+	b, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal json: %v", err)
+	}
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatalf("write json: %v", err)
+	}
 }
 
 // sweepGrid builds the grid: threads {1 (serial baseline), cores/2, cores} x ef
@@ -158,7 +205,7 @@ func TestProfileSweep(t *testing.T) {
 // serial baseline) and serial cells run once (deterministic).
 func sweepGrid(cores, repeats int) []profileCell {
 	threadSet := dedupThreads([]uint{1, uint(max(cores/2, 1)), uint(cores)})
-	efSet := []uint{64, 96, 128}
+	efSet := []uint{64, 96, 128, 192}
 	var grid []profileCell
 	for _, th := range threadSet {
 		r := repeats
