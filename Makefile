@@ -12,7 +12,7 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets notices install release-archive changelog test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
+.PHONY: all build build-small build-fat fetch-embed-assets notices install release-archive changelog test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-batchsize eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
 
 # `all` uses build-small to keep the test loop fast - the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -408,6 +408,13 @@ eval-embed-throughput:
 # (run `make build-fat` once so the embed assets exist). See README.
 eval-embedder-bench:
 	go test -tags='eval embed_model' -run '^$$' -bench 'Load|Embed' -benchmem ./tools/loadtest/embedder/
+
+# eval-embed-batchsize: drive the real embedder.Worker (model2vec + GOMAXPROCS
+# governor) draining a finite pending queue to empty, sweeping batch size and
+# synchronous mode to find the throughput knee and bound WAL fsync's share.
+# Override EMBED_BATCH_N (default 50000). Skips without an installed model2vec.
+eval-embed-batchsize:
+	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestEmbedBatchSizeWALSweep ./tools/loadtest/embedder/ -v -timeout=20m
 
 # eval-embed-models: phased benchmark of embedding model variants over
 # real codebase corpora. Used to inform hi5's defaults and publish a

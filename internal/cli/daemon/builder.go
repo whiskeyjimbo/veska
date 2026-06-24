@@ -328,6 +328,11 @@ func (b *daemonBuilder) buildVulnRefresher(vulnSource ports.VulnSource, vulnEnab
 
 // buildEmbedder elects exactly one embedder for this boot and constructs the
 // embedder worker.
+// coldScanEmbedBatchSize is the per-batch ref count for the embed drain. The
+// 50k-node sweep in tools/loadtest/embedder put the throughput knee at 128
+// (32->128 = 1.47x, 128->256 flat); see buildEmbedder for the rationale.
+const coldScanEmbedBatchSize = 128
+
 func (b *daemonBuilder) buildEmbedder() error {
 	if err := b.electEmbedder(); err != nil {
 		return err
@@ -342,6 +347,12 @@ func (b *daemonBuilder) buildEmbedder() error {
 		// the promotion Write tx (scan/resync), never on memory pressure -
 		// pausing there caused a silent indefinite stall.
 		embedder.WithPauser(b.writeBusy),
+		// 128 over the 32 default: once embed compute fans across cores the drain
+		// is SQL-bound, and a larger batch amortizes the per-batch write tx +
+		// statement prepares. A 50k-node drain sweep showed 32->128 = 1.47x with
+		// 128->256 flat, so 128 is the knee - the throughput win without holding
+		// governor*256 rows resident per pass.
+		embedder.WithBatchSize(coldScanEmbedBatchSize),
 	}
 	// The local model2vec/static embedder is pure CPU per node (tokenize ->
 	// row lookup -> mean-pool -> normalize) with no internal parallelism, so the
