@@ -48,4 +48,5 @@ the full semantic ranking or the lexical stand-in. Check `eng_get_status`'s
     and are only meaningful **relative to other hits in the same query** - don't
     threshold on the absolute number.
 
-Next: **[Daemon topology](daemon-topology.md)**.
+Next: **[Vector storage backends](vector-backends.md)** - how those vectors are
+stored and searched, and when to switch from the default.

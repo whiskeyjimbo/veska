@@ -72,6 +72,26 @@ they reason from the same structural ground truth instead of guessing.
 | `veska-daemon` (symlink) | Long-running process - owns the SQLite store, the fsnotify watcher, the embedder, and the post-promotion queue. Composition root: `internal/cli/daemon/wire.go`. |
 | `veska-mcp` (symlink) | Thin stdio shim proxying an editor's MCP connection to the daemon's Unix socket. Routes into `internal/cli/mcp`. |
 
+## Vector backends
+
+Semantic search and auto-linking find the nearest embeddings to a query. Two
+backends do that, chosen with `VESKA_VECTOR_BACKEND`: **`memory`** (`memvec`, the
+default - exact linear scan, lowest RAM, no setup) and **`usearch`** (approximate
+HNSW - flat query latency at scale, needs `libusearch_c.so`). Measured across Go
+repos (memvec is the exact-recall oracle; regenerate with `make eval-backend-matrix`):
+
+| repo    | symbols | q p95 memvec | q p95 usearch | usearch recall | RAM memvec | RAM usearch |
+|---------|--------:|-------------:|--------------:|---------------:|-----------:|------------:|
+| go-git  |  11,262 |       4.0 ms |        0.3 ms |         0.9990 |     34 MiB |      65 MiB |
+| veska   |  12,900 |       4.3 ms |        0.4 ms |         0.9994 |     39 MiB |      65 MiB |
+| grpc-go |  19,520 |       6.2 ms |        0.3 ms |         0.9979 |     59 MiB |     129 MiB |
+| consul  |  37,272 |      11.6 ms |        0.4 ms |         0.9965 |    113 MiB |     129 MiB |
+
+memvec's query latency grows with repo size while usearch stays flat (~0.3 ms);
+usearch trades ~2x the RAM and a slower index build for that. Stick with the
+default until linear-scan latency is noticeable. Full discussion:
+**[Vector storage backends](docs/manual/concepts/vector-backends.md)**.
+
 ## Requirements
 
 - **Go 1.26+**
@@ -202,105 +222,14 @@ through the daemon's `eng_reindex_repo` MCP tool , so your
 editor's MCP connection is not interrupted. With the daemon stopped, the
 same command falls back to a direct in-process reparse.
 
-### First call - 60 second sanity check
+### Next steps
 
-Once `cold scan: complete` shows in `~/.veska/logs/daemon.log`, drive two
-MCP tools from the shell so you've seen real output before pointing an
-editor at the daemon:
-
-```sh
-# Find a symbol by name. Unqualified matches are fine - "Run" finds
-# Server.Run, Command.Run, etc., with exact matches ranked first.
-printf '{"jsonrpc":"2.0","id":1,"method":"eng_find_symbol","params":{"symbol":"Run"}}\n' \
-  | ./bin/veska-mcp | jq '.result.nodes[0]'
-
-# Natural-language search; results carry inline snippets so a follow-up
-# Read is usually unnecessary.
-printf '{"jsonrpc":"2.0","id":1,"method":"eng_search_semantic","params":{"query":"parse config"}}\n' \
-  | ./bin/veska-mcp | jq '.result.results[:3]'
-```
-
-Either tool's response should contain `file_path`, `line_start/line_end`,
-and a `name` - if you see those, the daemon is parsing and serving your
-repo correctly. `eng_search_semantic` may return `[]` on a freshly
-registered repo while embeddings finish populating; check
-`eng_get_status`'s `pending_embeds` count.
-
-### Editor integration
-
-Point your MCP client at `bin/veska-mcp` as a stdio command. Replace
-`/abs/path/to/bin/veska-mcp` with the actual path on your machine.
-
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS;
-`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
-
-```json
-{
-  "mcpServers": {
-    "veska": {
-      "command": "/abs/path/to/bin/veska-mcp"
-    }
-  }
-}
-```
-
-**Cursor** (`~/.cursor/mcp.json`) and **Zed** (`~/.config/zed/settings.json`,
-under `context_servers`) accept the same `command` shape.
-
-**Continue** (`~/.continue/config.yaml`):
-
-```yaml
-mcpServers:
-  - name: veska
-    command: /abs/path/to/bin/veska-mcp
-```
-
-### Per-agent instruction snippets
-
-`veska init --agent <name>` writes (or safely appends to) an agent-specific
-instruction file inside the current project so the agent knows the Veska tool
-surface is available. Supported agents:
-`claude`, `codex`, `copilot`, `cursor`, `gemini`, `kiro`, `opencode`.
-
-```sh
-cd /path/to/your/repo
-./bin/veska init --agent claude    # creates or updates CLAUDE.md
-```
-
-The snippet is bracketed with `<!-- veska:init -->` markers so re-running the
-command updates only the Veska section and leaves the rest of the file alone.
-
-If your `VESKA_HOME` is non-default, pass it through:
-
-```json
-{
-  "mcpServers": {
-    "veska": {
-      "command": "/abs/path/to/bin/veska-mcp",
-      "env": { "VESKA_HOME": "/path/to/veska/home" }
-    }
-  }
-}
-```
-
-### Calling tools from the shell
-
-Skip the editor and drive `veska-mcp` directly - handy for debugging or
-scripting. The protocol is newline-delimited JSON-RPC; the method IS the
-tool name (no `tools/call` envelope):
-
-```sh
-printf '{"jsonrpc":"2.0","id":1,"method":"eng_get_status","params":{}}\n' \
-  | ./bin/veska-mcp \
-  | jq .
-
-printf '{"jsonrpc":"2.0","id":1,"method":"eng_find_symbol",
-        "params":{"repo_id":"<id>","branch":"main","symbol":"Foo"}}\n' \
-  | ./bin/veska-mcp | jq .result
-```
-
-Get `<id>` from `eng_list_repos`. The full tool surface is in
-[MCP tools](#mcp-tools) below.
+Point your editor's MCP client at `bin/veska-mcp` (a stdio command), and seed a
+per-agent instruction file with `veska init --agent <name>`. The full
+walkthroughs - editor configs (Claude Desktop, Cursor, Zed, Continue), the shell
+JSON-RPC interface, and the first-call sanity check - live in the manual:
+**[Quickstart](https://whiskeyjimbo.github.io/veska/getting-started/quickstart/)**
+and **[Connecting your editor](https://whiskeyjimbo.github.io/veska/guides/editor-setup/)**.
 
 ### Configuration
 
@@ -360,49 +289,9 @@ editors by `veska-mcp`). Tool names follow `eng_<verb>_<object>`. Quick map:
      return `method not found` if called. See "Parked tools" note further below. -->
 
 
-**Conventions across the tool surface:**
-
-- **Responses are `snake_case`.** Every tool emits the same node shape -
-  `{node_id, name, kind, file_path, line_start, line_end, signature?,
-  summary?, language?, exported?}` - plus `score`/`distance`/`snippet` on
-  search and blast hits. `summary` is a one-line description on graph-tool
-  responses (`eng_get_node`/`eng_find_symbol`/`eng_get_file_nodes`/
-  `eng_get_call_chain`): the optional LLM summary lane's stored value when
-  enabled, otherwise a heuristic. Empty result collections serialize as `[]`,
-  never omitted.
-- **`repo_id` accepts a short alias.** `eng_list_repos` returns a 12-char
-  `short_id` for each repo; anywhere a `repo_id` is required you may pass the
-  full id or that short prefix. An unknown `repo_id` is a loud `NotFound`
-  error, not an empty result.
-- **Required params are reported together.** A call missing several required
-  fields gets one error naming all of them.
-- **Param names are canonical, with journey-natural aliases:** `file_path`
-  (alias `path` on `eng_find_owner` / `eng_get_file_nodes`), `node_id`,
-  `symbol`. `eng_find_changed_symbols` accepts `base`/`head` alongside
-  `ref_a`/`ref_b`; `eng_search_similar` accepts `symbol` alongside `node_id`
-  (resolved via `FindNodes` with the same ambiguity-rejection as
-  `eng_get_blast_radius`). `eng_get_context_pack` takes exactly one of
-  `node_id`, `symbol`, or `task_id`.
-- **Cross-repo edges are uniform.** `eng_get_call_chain`,
-  `eng_get_blast_radius`, and `eng_get_context_pack` all surface a
-  `cross_repo_edges` array when nodes in the response have CALLS edges
-  pointing into another registered repo. Both directions are walked: a
-  blast/call_chain in the callers direction (or context_pack's both)
-  finds consumers of a library symbol in other repos via the reverse
-  stub resolver.
-- **`eng_find_symbol` matches unqualified names:** searching `Start` finds
-  `Server.Start`; exact matches rank first.
-- **Embedder quality is in-band:** when the daemon is on the low-quality
-  static-v2 fallback (no model2vec installed), every `eng_search_semantic`
-  response carries `low_quality_static_embedder` in `degraded_reasons` - run
-  `veska install model2vec` to clear it.
-
-**Parked tools.** A task family (`eng_get_active_task`,
-`eng_set_active_task`, `eng_get_task_history`) is implemented in the tree
-but **not** registered on the socket - calling it returns `method not
-found`. It stays parked until a task backend (Jira / Linear / GitHub) lands
-to populate the underlying table (`wire.go`). Treat it as
-non-existent for now; agent instruction snippets do not advertise it.
+See the **[MCP tools reference](docs/manual/reference/mcp-tools.md)** for the
+full response shape, `repo_id` aliasing, parameter aliases, cross-repo edges, and
+the parked task-tool family.
 
 ## Testing
 
