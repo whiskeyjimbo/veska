@@ -171,9 +171,16 @@ fi
 note "index times: $itimes"
 
 # --- run the comparison harness against the indexed db ---
+# MAX_QUERIES samples the per-node autolink sweep so memvec stays the recall
+# oracle even at 100k+ (full memvec O(n^2) is intractable; 2000 samples x O(n)
+# scan is seconds). memvec is still BUILT at every size (RAM ~350MB @113k) so the
+# large buckets keep a real recall number - the whole point of including tidb.
+# REPEATS averages the nondeterministic parallel profiles.
 note "running TestBackendMatrix ..."
 USEARCH_AB_DB="$DB" USEARCH_AB_LABELS="$labels" USEARCH_AB_INDEX_TIMES="$itimes" \
+  USEARCH_AB_MAX_QUERIES="${USEARCH_AB_MAX_QUERIES:-2000}" \
+  USEARCH_MATRIX_REPEATS="${USEARCH_MATRIX_REPEATS:-3}" \
   CGO_ENABLED=1 go -C "$REPO_SRC" test -tags "eval hnsw_native sqlite_fts5" \
-  -run TestBackendMatrix ./tools/loadtest/usearchab/ -v -count=1 -timeout 60m
+  -run TestBackendMatrix ./tools/loadtest/usearchab/ -v -count=1 -timeout 90m
 
 note "done -> /tmp/backend-matrix.md"
