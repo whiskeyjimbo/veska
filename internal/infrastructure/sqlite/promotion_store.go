@@ -184,6 +184,13 @@ type promotion struct {
 	// from the new file set (symbols a re-promote dropped). Drained to the
 	// vector pruner after commit.
 	deletedNodeIDs []string
+
+	// droppedDups counts nodes skipped by the INSERT ... ON CONFLICT DO NOTHING
+	// guard - distinct symbols that hashed to the same node_id within one batch
+	// (e.g. multiple `func _()` in a file, or TS getter/setter pairs). Surfaced
+	// once at warn after the batch so a parser-side id collision is visible
+	// without aborting the whole promotion.
+	droppedDups int
 }
 
 func (s *PromotionStore) newPromotion(ctx context.Context, tx *sql.Tx, batch application.PromotionBatch, root, module string) (*promotion, error) {
@@ -229,7 +236,8 @@ func (p *promotion) prepareStmts(ctx context.Context) error {
 			(node_id, branch, repo_id, language, kind, symbol_path, file_path,
 			 line_start, line_end, content_hash, structural_hash, last_promoted_at, actor_id, actor_kind,
 			 signature, snippet, prev_signature, exported)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`); err != nil {
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(node_id, branch) DO NOTHING`); err != nil {
 		return err
 	}
 	if p.prevSigSel, err = prepare(ctx, p.tx, "prev-sig select", `
@@ -398,7 +406,7 @@ func (p *promotion) insertNode(ctx context.Context, n *domain.Node, prevSig map[
 		prev = *ps
 	}
 	lineStart, lineEnd := nodeLines(n)
-	if _, err := p.ins.ExecContext(ctx,
+	res, err := p.ins.ExecContext(ctx,
 		string(n.ID),
 		p.branch,
 		p.repoID,
@@ -417,11 +425,23 @@ func (p *promotion) insertNode(ctx context.Context, n *domain.Node, prevSig map[
 		nodeSnippet(n),
 		prev,
 		nodeExported(n),
-	); err != nil {
+	)
+	if err != nil {
 		// Detailed metadata is included in unique constraint violations to help
 		// diagnose parser duplicate node definitions.
 		return fmt.Errorf("promoter: insert node %q (kind=%s name=%q path=%q lines=%v): %w",
 			n.ID, n.Kind, n.Name, n.Path, n.Lines, err)
+	}
+	// ON CONFLICT DO NOTHING: a second distinct symbol that hashed to an already
+	// inserted node_id is skipped rather than aborting the whole repo's atomic
+	// promotion (solov2-e7ur). The kept row is the first occurrence; sinks must
+	// fire exactly once for it, so skip the after-insert callbacks on the no-op.
+	if affected, aerr := res.RowsAffected(); aerr == nil && affected == 0 {
+		p.droppedDups++
+		slog.Warn("promotion: dropped duplicate node_id (parser id collision)",
+			"node_id", string(n.ID), "kind", n.Kind, "name", n.Name,
+			"path", n.Path, "lines", fmt.Sprintf("%v", n.Lines))
+		return nil
 	}
 	nw := nodeWrite{
 		NodeID: string(n.ID),
