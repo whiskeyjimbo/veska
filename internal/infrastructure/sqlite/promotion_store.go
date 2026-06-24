@@ -434,7 +434,7 @@ func (p *promotion) insertNode(ctx context.Context, n *domain.Node, prevSig map[
 	}
 	// ON CONFLICT DO NOTHING: a second distinct symbol that hashed to an already
 	// inserted node_id is skipped rather than aborting the whole repo's atomic
-	// promotion (solov2-e7ur). The kept row is the first occurrence; sinks must
+	// promotion. The kept row is the first occurrence; sinks must
 	// fire exactly once for it, so skip the after-insert callbacks on the no-op.
 	if affected, aerr := res.RowsAffected(); aerr == nil && affected == 0 {
 		p.droppedDups++

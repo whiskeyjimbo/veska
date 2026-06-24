@@ -43,8 +43,8 @@ func TestMultiRepoWatcherAdd(t *testing.T) {
 	}
 }
 
-// TestMultiRepoWatcherAddBeforeStart guards solov2-bihz: a repo-add that races
-// ahead of Start (m.ctx still nil) must not panic on context.WithCancel(nil).
+// TestMultiRepoWatcherAddBeforeStart guards against a repo-add that races
+// ahead of Start (m.ctx still nil) panicking on context.WithCancel(nil).
 // The watcher falls back to a background context and stays functional.
 func TestMultiRepoWatcherAddBeforeStart(t *testing.T) {
 	t.Parallel()

@@ -29,7 +29,7 @@ func (s *countingSink) AfterNodeInsert(_ context.Context, _ *sql.Tx, n nodeWrite
 	return nil
 }
 
-// TestPromotionStore_DuplicateNodeIDDoesNotAbortRepo guards solov2-e7ur: a
+// TestPromotionStore_DuplicateNodeIDDoesNotAbortRepo guards against a
 // single node_id collision within one batch (two distinct symbols hashing to
 // the same id) must be dropped-with-warning, not abort the whole atomic
 // promotion and leave the repo at zero nodes.

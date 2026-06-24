@@ -49,7 +49,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 		// on this ctx; a scripted boot+add against a home with an existing repo
 		// (slow rehydrateVectors below) otherwise races into a nil m.ctx panic.
 		// Start is a pure context assignment - no goroutine, no deps on the lines
-		// between here and the original site (solov2-bihz).
+		// between here and the original site.
 		d.watcher.Start(d.ctx)
 		d.startMCPServer()
 		d.awaitListenerSockets()

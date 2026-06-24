@@ -100,7 +100,7 @@ func (m *MultiRepoWatcher) startRepoWatch(repoID, rootPath string) (*repoWatch, 
 	// Fall back to Background if Add races ahead of Start before m.ctx is wired
 	// (mirrors repoRegistrar.AddRepo's daemonCtx guard). The daemon ordering
 	// makes this unreachable in production, so a hit signals a regression - warn
-	// loudly rather than silently watch on a detached context (solov2-bihz).
+	// loudly rather than silently watch on a detached context.
 	parent := m.ctx
 	if parent == nil {
 		slog.Warn("multiwatcher: Add before Start - watching on background context", "repoID", repoID)
