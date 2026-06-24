@@ -64,6 +64,54 @@ func TestIngestionBusyPredicate_MemoryPressure(t *testing.T) {
 	}
 }
 
+// TestWriteBusyExcludesMemoryPressure pins the solov2-b5aw fix: the embedder's
+// pauser (writeBusy) must NOT pause on memory pressure - only on scan/resync
+// write-contention - so embeddings keep draining instead of stalling silently
+// and indefinitely on a memory-tight host. The queue-lane pauser (ingestionBusy)
+// still defers under pressure.
+func TestWriteBusyExcludesMemoryPressure(t *testing.T) {
+	b := &daemonBuilder{}
+	b.buildIngestionBusy(fakeAvail(pressureFloorBytes-1, true)) // under pressure
+
+	if b.writeBusy() {
+		t.Fatalf("writeBusy must be false under memory pressure (embedder keeps draining)")
+	}
+	if !b.ingestionBusy() {
+		t.Fatalf("ingestionBusy must stay true under memory pressure (queue lanes defer)")
+	}
+
+	// writeBusy IS true while a scan holds the Write pool, regardless of memory.
+	b.scanTracker.Start("repo-1")
+	if !b.writeBusy() {
+		t.Fatalf("writeBusy must be true while a scan runs")
+	}
+}
+
+// TestPressureGate_LogsEdges pins that the gate logs once on the rising edge and
+// once on the falling edge - turning the previously silent throttle into a
+// diagnosable state - and not on every poll tick.
+func TestPressureGate_LogsEdges(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	avail := pressureFloorBytes - 1 // start under pressure
+	gate := newPressureGate(func() (uint64, bool) { return avail, true }, logger)
+
+	if !gate.busy() || !gate.busy() {
+		t.Fatalf("expected busy=true while under the floor")
+	}
+	if c := strings.Count(buf.String(), "memory pressure - deferring"); c != 1 {
+		t.Fatalf("expected exactly one rising-edge WARN across two ticks, got %d; log=%q", c, buf.String())
+	}
+
+	avail = pressureFloorBytes * 4 // recover
+	if gate.busy() {
+		t.Fatalf("expected busy=false after recovery")
+	}
+	if !strings.Contains(buf.String(), "memory pressure cleared") {
+		t.Fatalf("expected falling-edge INFO; log=%q", buf.String())
+	}
+}
+
 // TestMaybeWarnLowMemory pins the startup advisory: it fires for the memory
 // backend below the advisory floor, and stays silent above the floor, for a
 // non-memory backend, or when the reader is unsupported.

@@ -4,6 +4,7 @@ package daemon
 
 import (
 	"log/slog"
+	"sync"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/platform/meminfo"
@@ -75,4 +76,40 @@ func maybeWarnLowMemory(backend vector.BackendKind, avail availMemFunc, logger *
 	}
 	logger.Warn("daemon: low available memory for in-memory vector backend - consider VESKA_VECTOR_BACKEND=usearch or freeing memory",
 		"available_bytes", n, "advisory_floor_bytes", advisoryFloorBytes)
+}
+
+// pressureGate wraps underMemoryPressure with edge-triggered logging so the
+// memory-pressure throttle on the post-promotion queue lanes is diagnosable
+// rather than a silent indefinite stall (solov2-b5aw). busy() is polled every
+// ~250ms from the queue poller goroutine; it logs only on the rising edge
+// (pressure engages) and the falling edge (clears), never per-tick. active is
+// guarded so concurrent callers stay race-free.
+type pressureGate struct {
+	avail  availMemFunc
+	logger *slog.Logger
+	mu     sync.Mutex
+	active bool
+}
+
+func newPressureGate(avail availMemFunc, logger *slog.Logger) *pressureGate {
+	return &pressureGate{avail: avail, logger: logger}
+}
+
+// busy reports whether memory pressure should defer the deferrable lanes, and
+// logs the transition into/out of that state.
+func (g *pressureGate) busy() bool {
+	under := underMemoryPressure(g.avail)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	switch {
+	case under && !g.active:
+		g.active = true
+		n, _ := g.avail()
+		g.logger.Warn("daemon: memory pressure - deferring post-promotion queue lanes (embedding continues); free RAM or switch to VESKA_VECTOR_BACKEND=usearch",
+			"available_mib", n>>20, "floor_mib", pressureFloorBytes>>20)
+	case !under && g.active:
+		g.active = false
+		g.logger.Info("daemon: memory pressure cleared - resuming post-promotion queue lanes")
+	}
+	return under
 }
