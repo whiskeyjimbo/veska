@@ -498,47 +498,4 @@ func (p *promotion) advanceRepoSHA(ctx context.Context) error {
 	return nil
 }
 
-func nodeLanguage(n *domain.Node) string {
-	if n.Language == nil {
-		return ""
-	}
-	return *n.Language
-}
-
-func nodeLines(n *domain.Node) (lineStart, lineEnd any) {
-	if n.Lines == nil {
-		return nil, nil
-	}
-	return n.Lines.Start, n.Lines.End
-}
-
-func nodeStructuralHash(n *domain.Node) any {
-	if n.StructuralHash == nil {
-		return nil
-	}
-	return string(*n.StructuralHash)
-}
-
-func nodeContentHash(n *domain.Node) string {
-	if n.ContentHash == nil {
-		return ""
-	}
-	return string(*n.ContentHash)
-}
-
-func nodeSignature(n *domain.Node) any {
-	if n.Signature == nil {
-		return nil
-	}
-	return *n.Signature
-}
-
-func nodeExported(n *domain.Node) any {
-	if n.Exported == nil {
-		return nil
-	}
-	if *n.Exported {
-		return 1
-	}
-	return 0
-}
+// The node* column-mapper helpers live in promotion_node_columns.go.

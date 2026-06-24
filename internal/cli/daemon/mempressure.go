@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector"
 	"github.com/whiskeyjimbo/veska/internal/platform/meminfo"
 )
@@ -122,4 +123,38 @@ func (g *pressureGate) busy() bool {
 		g.logger.Info("daemon: memory pressure cleared - resuming post-promotion queue lanes")
 	}
 	return under
+}
+
+// buildIngestionBusy installs the scan tracker and the daemon's pause predicates.
+// resyncRef is filled in by finalize; the closures read it through the builder.
+// avail is injected so tests can drive the memory-pressure branch.
+//
+//   - writeBusy: a cold scan or startup resync is holding the Write pool. The
+//     embedder skips its tick on this so it can't race the promotion Write tx
+//     into SQLITE_BUSY. It deliberately excludes memory pressure - pausing
+//     embedding does not free the resident memvec index or the cold-scan working
+//     set (the real RAM hogs), it only stalls semantic search on a tight host
+//     (solov2-b5aw); embedding is bounded per batch and drains regardless.
+//   - ingestionBusy adds the memory-pressure guard on top of writeBusy and gates
+//     only the deferrable post-promotion queue lanes. The pressureGate logs the
+//     rising/falling edge so the throttle is no longer a silent stall.
+//   - memPressure: the raw predicate, surfaced in eng_get_status.
+func (b *daemonBuilder) buildIngestionBusy(avail availMemFunc) {
+	b.scanTracker = application.NewScanTracker()
+	b.availMem = avail
+	floor := resolveFloorBytes(b.fileCfg.Storage.MemoryPressureFloorMiB)
+	b.memPressure = func() bool { return underMemoryPressure(b.availMem, floor) }
+	b.writeBusy = func() bool {
+		if b.scanTracker.IsAnyScanRunning() {
+			return true
+		}
+		return b.resyncRef != nil && b.resyncRef.IsSyncing()
+	}
+	gate := newPressureGate(b.availMem, floor, slog.Default())
+	b.ingestionBusy = func() bool {
+		if b.writeBusy() {
+			return true
+		}
+		return gate.busy()
+	}
 }
