@@ -95,6 +95,39 @@ export const arrow = () => {};
 	}
 }
 
+// TestTS_GetterSetterDistinctNodeIDs verifies a getter/setter pair for the same
+// property yields two distinct graph nodes (distinct node_ids) rather than
+// colliding into one - the accessor keyword disambiguates the id while the
+// display name stays the property name.
+func TestTS_GetterSetterDistinctNodeIDs(t *testing.T) {
+	src := []byte(`
+class Form {
+  get pref(): string { return this._p; }
+  set pref(v: string) { this._p = v; }
+  save(): void {}
+}
+`)
+	p := treesitter.NewTSParser()
+	result, err := p.ParseFile(context.Background(), tsRepoID, "src/form.ts", src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var prefNodes []*domain.Node
+	for _, n := range result.Nodes {
+		if n.Name == "Form.pref" {
+			prefNodes = append(prefNodes, n)
+		}
+	}
+	if len(prefNodes) != 2 {
+		t.Fatalf("want 2 'Form.pref' nodes (getter+setter), got %d (nodes: %v)",
+			len(prefNodes), nodeNames(result.Nodes))
+	}
+	if prefNodes[0].ID == prefNodes[1].ID {
+		t.Errorf("getter and setter share node_id %q - they would collide on insert", prefNodes[0].ID)
+	}
+}
+
 func TestTS_ClassDeclaration(t *testing.T) {
 	src := []byte(`
 class Animal {

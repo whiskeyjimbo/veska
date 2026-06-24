@@ -241,7 +241,16 @@ func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className str
 	}
 	methodName := string(src[nameNode.StartByte():nameNode.EndByte()])
 	fullName := className + "." + methodName
-	id := nodeID(repoID, path, domain.KindMethod, fullName)
+	// A getter and setter for the same property share class+name+kind and would
+	// hash to one node_id, colliding them into a single graph node. The accessor
+	// keyword is intrinsic to the symbol (stable across edits, unlike line
+	// numbers), so it disambiguates the id while the display name stays the
+	// property name - mirroring the multi-init workaround in go_query.go.
+	idName := fullName
+	if accessor := tsAccessorKind(node); accessor != "" {
+		idName = fullName + "#" + accessor
+	}
+	id := nodeID(repoID, path, domain.KindMethod, idName)
 	lr := lineRange(node)
 	raw := string(src[node.StartByte():node.EndByte()])
 	n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: fullName, Kind: domain.KindMethod}, domain.WithLanguage("typescript"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(exported))
@@ -249,6 +258,22 @@ func parseTSMethodDef(node *sitter.Node, src []byte, repoID, path, className str
 		return nil
 	}
 	return n
+}
+
+// tsAccessorKind returns "get" or "set" when the method_definition is a property
+// accessor, or "" for an ordinary method. The keyword is an anonymous leading
+// token (after any static/async modifiers), so we scan the children rather than
+// assuming a fixed position.
+func tsAccessorKind(node *sitter.Node) string {
+	for i := range int(node.ChildCount()) {
+		switch node.Child(i).Type() {
+		case "get":
+			return "get"
+		case "set":
+			return "set"
+		}
+	}
+	return ""
 }
 
 func parseTSInterfaceDecl(node *sitter.Node, src []byte, repoID, path string, exported bool) *domain.Node {
