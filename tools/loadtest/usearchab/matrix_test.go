@@ -108,9 +108,11 @@ func TestBackendMatrix(t *testing.T) {
 
 	var rows []matrixRow
 	for k, nvs := range buckets {
+		bs := time.Now()
 		row := measureBucket(t, ctx, k, nvs, labels, maxQueries, repeats, memvecMax > 0 && len(nvs) > memvecMax)
 		row.IndexSecs = times[k.repo]
 		rows = append(rows, row)
+		t.Logf("bucket %s (%d nodes) measured in %s", row.Repo, row.Nodes, time.Since(bs).Round(time.Second))
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Nodes < rows[j].Nodes })
 
