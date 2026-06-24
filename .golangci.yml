@@ -14,3 +14,14 @@ linters:
     # Paths are regexps matched against the file path from the module root.
     paths:
       - ^tools/
+    rules:
+      # SA5011 false-positive on the `if x == nil { t.Fatal(...) } ... x.Field`
+      # idiom in tests. t.Fatal IS terminal, but staticcheck's terminal detection
+      # is Go-toolchain-version-sensitive and misses it under some toolchains
+      # (CI vs local skew), flagging an unreachable nil deref. A test that truly
+      # nil-derefs panics visibly when it runs, so excluding SA5011 in _test.go
+      # costs little and ends the recurring false-positive churn.
+      - path: _test\.go
+        linters:
+          - staticcheck
+        text: SA5011
