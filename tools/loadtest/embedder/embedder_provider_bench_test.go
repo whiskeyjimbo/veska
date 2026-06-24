@@ -22,8 +22,10 @@ package embedder
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
@@ -107,5 +109,95 @@ func BenchmarkEmbed_Model2Vec(b *testing.B) {
 		if _, err := p.Embed(ctx, benchEmbedText); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// BenchmarkEmbed_Model2Vec_Parallel is the A/B partner to the serial bench
+// above: it runs Embed across GOMAXPROCS goroutines on one shared Provider,
+// mirroring how the cold-scan embed worker now fans batches across cores. The
+// ns/op ratio (serial / parallel) is the realized core-scaling speedup, and
+// running it under -race additionally proves Embed is concurrency-safe.
+func BenchmarkEmbed_Model2Vec_Parallel(b *testing.B) {
+	dir := model2vecDir()
+	if dir == "" {
+		b.Skip("model2vec not installed under VESKA_HOME - run 'veska install model2vec'")
+	}
+	p, err := model2vec.New(dir)
+	if err != nil {
+		b.Fatal(err)
+	}
+	ctx := context.Background()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			if _, err := p.Embed(ctx, benchEmbedText); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+// TestEmbed_Model2Vec_ConcurrentByteIdentical verifies the fan-out is sound: a
+// shared Provider embedded concurrently from many goroutines yields output
+// byte-identical to the serial result for the same text (Embed is a read-only
+// pure function). Run under -race to catch any shared-state hazard.
+func TestEmbed_Model2Vec_ConcurrentByteIdentical(t *testing.T) {
+	dir := model2vecDir()
+	if dir == "" {
+		t.Skip("model2vec not installed under VESKA_HOME - run 'veska install model2vec'")
+	}
+	p, err := model2vec.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	texts := []string{
+		benchEmbedText,
+		"package main\n\nfunc main() {}",
+		"type Node struct { ID string; Kind string }",
+		"// L2-normalize the pooled vector before storage",
+		"SELECT node_id, signature FROM nodes WHERE branch = ?",
+	}
+	want := make([][]float32, len(texts))
+	for i, txt := range texts {
+		v, err := p.Embed(ctx, txt)
+		if err != nil {
+			t.Fatalf("serial embed %d: %v", i, err)
+		}
+		want[i] = v
+	}
+
+	const workers = 16
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for w := range workers {
+		wg.Add(1)
+		go func(seed int) {
+			defer wg.Done()
+			for r := range 50 {
+				i := (seed + r) % len(texts)
+				got, err := p.Embed(ctx, texts[i])
+				if err != nil {
+					errs <- err
+					return
+				}
+				if len(got) != len(want[i]) {
+					errs <- fmt.Errorf("text %d: dim %d != %d", i, len(got), len(want[i]))
+					return
+				}
+				for k := range got {
+					if got[k] != want[i][k] {
+						errs <- fmt.Errorf("text %d elem %d: %v != %v", i, k, got[k], want[i][k])
+						return
+					}
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
 	}
 }

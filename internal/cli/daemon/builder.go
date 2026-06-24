@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -333,18 +334,29 @@ func (b *daemonBuilder) buildEmbedder() error {
 	}
 	b.refs = sqlite.NewEmbeddingRefsRepo(b.pools.ReadDB, b.pools.Write)
 	// Throughput is bounded by the greedy drain + Governor, not a fixed rate.
-	// The default governor (fixed concurrency 1) suits a single local Ollama
-	// instance and local embedders alike: both serialize internally, so 1 is
-	// the ceiling and the greedy drain reaches it. Hosted-API providers will
-	// elect an adaptive governor here once they land.
-	worker, err := embedder.NewWorker(b.refs, b.provider, b.vec,
+	// Hosted-API providers will elect an adaptive governor here once they land.
+	opts := []embedder.Option{
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
 		embedder.WithMetrics(b.metrics),
 		// writeBusy, not ingestionBusy: the embedder pauses only to avoid racing
 		// the promotion Write tx (scan/resync), never on memory pressure -
 		// pausing there caused a silent indefinite stall.
 		embedder.WithPauser(b.writeBusy),
-	)
+	}
+	// The local model2vec/static embedder is pure CPU per node (tokenize ->
+	// row lookup -> mean-pool -> normalize) with no internal parallelism, so the
+	// default fixed-1 governor pins cold-scan embedding to a single core. Embed
+	// is a read-only pure function (concurrent-safe), so fan it across the
+	// available cores. Ollama keeps fixed-1: a single local instance serializes
+	// internally and the API path's concurrency lever is its own RPM/TPM-sized
+	// governor, not this one. GOMAXPROCS(0) (not NumCPU) so container CPU quotas
+	// and explicit overrides are respected.
+	if !b.embedderIsOllama {
+		if n := runtime.GOMAXPROCS(0); n > 1 {
+			opts = append(opts, embedder.WithGovernor(embedder.NewFixedGovernor(n)))
+		}
+	}
+	worker, err := embedder.NewWorker(b.refs, b.provider, b.vec, opts...)
 	if err != nil {
 		return fmt.Errorf("daemon: embedder worker: %w", err)
 	}
