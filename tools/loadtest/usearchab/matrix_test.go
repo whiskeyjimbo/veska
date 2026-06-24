@@ -50,10 +50,29 @@ type matrixRow struct {
 	MemP95ms    float64 `json:"mem_p95_ms"`
 	UseP50ms    float64 `json:"use_p50_ms"`
 	UseP95ms    float64 `json:"use_p95_ms"`
-	Recall      float64 `json:"recall"`
+	Recall      float64 `json:"recall"` // default profile, vs memvec oracle; -1 = n/a
 	MemMiB      float64 `json:"mem_mib"`
 	UseMiB      float64 `json:"use_mib"`
 	AutolinkEdg int     `json:"autolink_edges"`
+
+	// Profiles holds the build-time-vs-recall measurement for each usearch
+	// build profile. Query latency/RAM above are profile-independent (the search
+	// beam is fixed), so they are captured once from the default profile.
+	Profiles []profileMeasure `json:"profiles"`
+}
+
+// profileMeasure is one usearch_index_profile's build cost and recall. Parallel
+// profiles are nondeterministic, so build/recall are the median over repeats with
+// the observed min/max retained.
+type profileMeasure struct {
+	Name       string  `json:"name"`
+	Parallel   bool    `json:"parallel"`
+	BuildMs    float64 `json:"build_ms"`
+	BuildMinMs float64 `json:"build_min_ms"`
+	BuildMaxMs float64 `json:"build_max_ms"`
+	Recall     float64 `json:"recall"` // -1 = n/a (memvec oracle skipped)
+	RecallMin  float64 `json:"recall_min"`
+	RecallMax  float64 `json:"recall_max"`
 }
 
 func TestBackendMatrix(t *testing.T) {
@@ -83,16 +102,19 @@ func TestBackendMatrix(t *testing.T) {
 	// impractical; 0 = always build memvec.
 	maxQueries := envInt("USEARCH_AB_MAX_QUERIES", 0)
 	memvecMax := envInt("USEARCH_AB_MEMVEC_MAX_NODES", 0)
+	// Parallel build profiles are nondeterministic; each runs this many times and
+	// reports median/min/max. Serial profiles (default, accurate) run once.
+	repeats := envInt("USEARCH_MATRIX_REPEATS", 3)
 
 	var rows []matrixRow
 	for k, nvs := range buckets {
-		row := measureBucket(t, ctx, k, nvs, labels, maxQueries, memvecMax > 0 && len(nvs) > memvecMax)
+		row := measureBucket(t, ctx, k, nvs, labels, maxQueries, repeats, memvecMax > 0 && len(nvs) > memvecMax)
 		row.IndexSecs = times[k.repo]
 		rows = append(rows, row)
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Nodes < rows[j].Nodes })
 
-	table := renderMatrix(rows)
+	table := renderMatrix(rows) + "\n" + renderProfileTable(rows) + matrixGlossary
 	fmt.Print("\n" + table + "\n")
 	out := "/tmp/backend-matrix.md"
 	if err := os.WriteFile(out, []byte(table), 0o644); err != nil {
@@ -108,7 +130,7 @@ func TestBackendMatrix(t *testing.T) {
 // sweep stays tractable on large repos. When memvecSkip is set (bucket too big
 // for an in-RAM exact index) memvec is skipped entirely - a usearch-only row,
 // recall reported as n/a.
-func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec, labels map[string]string, maxQueries int, memvecSkip bool) matrixRow {
+func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec, labels map[string]string, maxQueries, repeats int, memvecSkip bool) matrixRow {
 	batch := make([]domain.EmbeddingRow, len(nvs))
 	for i, nv := range nvs {
 		batch[i] = domain.EmbeddingRow{NodeID: nv.nodeID, ContentHash: nv.hash, ModelID: nv.modelID, Vector: nv.vec}
@@ -121,25 +143,9 @@ func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec
 	}
 	row := matrixRow{Repo: label, Branch: k.branch, Nodes: len(nvs), Recall: -1} // -1 = n/a
 
-	// --- usearch (always): C-side, reports its own footprint via MemoryUsage ---
-	use, err := vector.NewVectorStorage(vector.BackendUsearch, t.TempDir())
-	if err != nil {
-		t.Fatalf("new usearch: %v", err)
-	}
-	useStart := time.Now()
-	if err := use.UpsertEmbeddings(ctx, k.repo, k.branch, batch); err != nil {
-		t.Fatalf("usearch upsert: %v", err)
-	}
-	row.UseBuildMs = msOf(time.Since(useStart))
-	if mu, ok := use.(interface{ MemoryUsage() (uint64, error) }); ok {
-		if b, err := mu.MemoryUsage(); err == nil {
-			row.UseMiB = float64(b) / (1024 * 1024)
-		}
-	}
-	useEdges, _, useLat := candidates(ctx, t, use, k, queryNodes)
-	row.UseP50ms, row.UseP95ms = pct(useLat, 50), pct(useLat, 95)
-
-	// --- memvec (unless skipped): Go-heap, measured exactly via HeapAlloc ---
+	// --- memvec oracle (unless skipped): exact edges + query latency + RAM ---
+	// Built first so the usearch profiles below can score recall against it.
+	var memEdges map[edge]struct{}
 	if !memvecSkip {
 		mem, err := vector.NewVectorStorage(vector.BackendMemory, t.TempDir())
 		if err != nil {
@@ -152,22 +158,92 @@ func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec
 		}
 		row.MemBuildMs = msOf(time.Since(memStart))
 		row.MemMiB = mibSince(heap0, heapAllocBytes())
-
-		memEdges, _, memLat := candidates(ctx, t, mem, k, queryNodes)
+		var memLat []time.Duration
+		memEdges, _, memLat = candidates(ctx, t, mem, k, queryNodes)
 		row.MemP50ms, row.MemP95ms = pct(memLat, 50), pct(memLat, 95)
-		_, _, shared := diff(memEdges, useEdges)
 		row.AutolinkEdg = len(memEdges)
-		if len(memEdges) > 0 {
-			row.Recall = float64(shared) / float64(len(memEdges))
-		} else {
-			row.Recall = 1
-		}
 	}
 
-	if d, ok := use.(interface{ Destroy() }); ok {
-		d.Destroy()
+	// --- usearch build-profile sweep ---
+	// Profiles trade BUILD time vs RECALL only - the search beam (ef_search) is
+	// fixed, so query latency + RAM are profile-independent and captured once
+	// from the default profile. Parallel profiles are nondeterministic, so they
+	// run `repeats` times and report median/min/max; serial profiles run once.
+	profiles := []struct {
+		name     string
+		parallel bool
+	}{
+		{vector.ProfileDefault, false},
+		{vector.ProfileFast, true},
+		{vector.ProfileBalanced, true},
+		{vector.ProfileAccurate, false},
+	}
+	for _, p := range profiles {
+		reps := 1
+		if p.parallel && repeats > 1 {
+			reps = repeats
+		}
+		var builds, recalls []float64
+		for i := 0; i < reps; i++ {
+			opts, err := vector.OptionsForProfile(p.name)
+			if err != nil {
+				t.Fatalf("profile %q: %v", p.name, err)
+			}
+			use, err := vector.NewVectorStorage(vector.BackendUsearch, t.TempDir(), opts...)
+			if err != nil {
+				t.Fatalf("new usearch %q: %v", p.name, err)
+			}
+			start := time.Now()
+			if err := use.UpsertEmbeddings(ctx, k.repo, k.branch, batch); err != nil {
+				t.Fatalf("usearch upsert %q: %v", p.name, err)
+			}
+			buildMs := msOf(time.Since(start))
+			builds = append(builds, buildMs)
+			useEdges, _, useLat := candidates(ctx, t, use, k, queryNodes)
+			if memEdges != nil {
+				rc := 1.0
+				if len(memEdges) > 0 {
+					_, _, shared := diff(memEdges, useEdges)
+					rc = float64(shared) / float64(len(memEdges))
+				}
+				recalls = append(recalls, rc)
+			}
+			// The default profile supplies the profile-independent figures.
+			if p.name == vector.ProfileDefault && i == 0 {
+				row.UseBuildMs = buildMs
+				row.UseP50ms, row.UseP95ms = pct(useLat, 50), pct(useLat, 95)
+				if mu, ok := use.(interface{ MemoryUsage() (uint64, error) }); ok {
+					if b, err := mu.MemoryUsage(); err == nil {
+						row.UseMiB = float64(b) / (1024 * 1024)
+					}
+				}
+				if len(recalls) > 0 {
+					row.Recall = recalls[0]
+				}
+			}
+			if d, ok := use.(interface{ Destroy() }); ok {
+				d.Destroy()
+			}
+		}
+		pm := profileMeasure{Name: p.name, Parallel: p.parallel, Recall: -1}
+		pm.BuildMs, pm.BuildMinMs, pm.BuildMaxMs = stats(builds)
+		if len(recalls) > 0 {
+			pm.Recall, pm.RecallMin, pm.RecallMax = stats(recalls)
+		}
+		row.Profiles = append(row.Profiles, pm)
 	}
 	return row
+}
+
+// stats returns the median, min, and max of xs (median = upper-middle for even
+// counts). Empty input yields zeros.
+func stats(xs []float64) (med, lo, hi float64) {
+	if len(xs) == 0 {
+		return 0, 0, 0
+	}
+	s := append([]float64(nil), xs...)
+	sort.Float64s(s)
+	return s[len(s)/2], s[0], s[len(s)-1]
 }
 
 // sampleNodes returns up to max nodes (seeded random subset) for the query set;
@@ -188,9 +264,10 @@ func sampleNodes(nvs []nodeVec, max int) []nodeVec {
 func renderMatrix(rows []matrixRow) string {
 	var b strings.Builder
 	b.WriteString("## memvec vs usearch - backend metrics matrix\n\n")
+	b.WriteString("Backend comparison at the **default** build profile. This is the *which backend* axis: memvec's query latency grows with size (O(n) scan), usearch's stays flat (O(log n)) - the time-to-use trade. ")
 	b.WriteString("Autolink recall is usearch vs the exact memvec oracle (memvec is 1.0000 by definition). ")
 	b.WriteString("Build = time to construct the in-memory index from persisted vectors. ")
-	b.WriteString("Query p50/p95 = per-node nearest-neighbour search latency. Memory = marginal index footprint.\n\n")
+	b.WriteString("Query p50/p95 = per-node nearest-neighbour search latency (profile-independent). Memory = marginal index footprint.\n\n")
 	b.WriteString("Index (parse+embed) is the one-time, backend-independent cost to make the repo searchable.\n\n")
 	b.WriteString("| repo | nodes | index (parse+embed) | build mem | build usearch | q p50 mem | q p50 usearch | q p95 mem | q p95 usearch | usearch recall | mem RAM | usearch RAM |\n")
 	b.WriteString("|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n")
@@ -215,7 +292,33 @@ func renderMatrix(rows []matrixRow) string {
 			memP50, r.UseP50ms, memP95, r.UseP95ms,
 			recall, memRAM, r.UseMiB))
 	}
-	b.WriteString(matrixGlossary)
+	return b.String()
+}
+
+// renderProfileTable is the *which setting* axis: how each usearch_index_profile
+// trades index build time against autolink recall. Query latency is omitted on
+// purpose - it does not vary by profile (the search beam is fixed).
+func renderProfileTable(rows []matrixRow) string {
+	var b strings.Builder
+	b.WriteString("## usearch build profiles - build time vs recall\n\n")
+	b.WriteString("The `usearch_index_profile` lever (`default`|`fast`|`balanced`|`accurate`) trades index BUILD time against autolink RECALL; ")
+	b.WriteString("it does **not** change query latency (the search beam is fixed). Each cell is `build / recall` (recall vs the exact memvec oracle, `n/a` when the bucket was too big to build an exact index). ")
+	b.WriteString("Parallel profiles (`fast`, `balanced`) are nondeterministic - build/recall are the median over repeated runs. The trade only bites at scale; below ~40k nodes every profile is ~instant at ~0.997+ recall.\n\n")
+	b.WriteString("| repo | nodes | default (serial ef64) | fast (parallel ef64) | balanced (parallel ef128) | accurate (serial ef192) |\n")
+	b.WriteString("|---|--:|--:|--:|--:|--:|\n")
+	for _, r := range rows {
+		cell := map[string]string{}
+		for _, p := range r.Profiles {
+			rc := "n/a"
+			if p.Recall >= 0 {
+				rc = fmt.Sprintf("%.4f", p.Recall)
+			}
+			cell[p.Name] = fmt.Sprintf("%s / %s", dur(p.BuildMs), rc)
+		}
+		b.WriteString(fmt.Sprintf("| %s | %d | %s | %s | %s | %s |\n",
+			r.Repo, r.Nodes,
+			cell[vector.ProfileDefault], cell[vector.ProfileFast], cell[vector.ProfileBalanced], cell[vector.ProfileAccurate]))
+	}
 	return b.String()
 }
 

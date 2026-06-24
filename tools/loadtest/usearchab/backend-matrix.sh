@@ -33,9 +33,10 @@ REPOS=(
   "M   veska   LOCAL:$REPO_SRC"
   "M2  grpc-go grpc/grpc-go"
   "L   consul  hashicorp/consul"
-  # Heavy XL/XXL repos - uncomment to extend the curve. They clone GBs and take
+  "L2  vault   hashicorp/vault"
+  "XL  tidb    pingcap/tidb"
+  # Heavy XXL repo - uncomment to extend the curve further. Clones GBs and takes
   # tens of minutes to index; set the sampling knobs below when you do.
-  # "XL  tidb    pingcap/tidb"
   # "XXL k8s     kubernetes/kubernetes"
 )
 
