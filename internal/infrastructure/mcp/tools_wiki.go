@@ -12,6 +12,8 @@ import (
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
+	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 // HotZoneResponse is the envelope returned by eng_get_hot_zone.
@@ -194,6 +196,12 @@ func makeHotZoneHandler(svc *wiki.HotZoneService, repoRoot RepoRootFunc, repos a
 
 		degraded := []string{}
 		hint := ""
+		// Hot-zone ranking is pure git-churn; on a shallow clone every file
+		// scores freq=1, so the ranking is noise. Flag it whether or not zones
+		// came back.
+		if shallow, serr := gitinfra.IsShallow(ctx, root); serr == nil && shallow {
+			degraded = AppendDegradedReason(degraded, protocol.DegradedReasonShallowClone)
+		}
 		if len(zones) == 0 {
 			switch {
 			case rep.CandidatesScanned == 0:

@@ -15,6 +15,8 @@ import (
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
+	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 // RegisterOwnerTools registers the eng_find_owner tool.
@@ -103,10 +105,17 @@ func makeFindOwnerHandler(db *sql.DB, repos application.RepoLister) ToolHandler 
 		}
 
 		if email, ok := gitBlameEmail(root, p.FilePath); ok {
-			return map[string]any{
+			resp := map[string]any{
 				"owner":  email,
 				"source": "git_blame",
-			}, nil
+			}
+			// On a shallow clone blame resolves to the clone-commit author, not
+			// the real last author - flag the ownership as not authoritative.
+			// (CODEOWNERS above is unaffected, so it is not flagged.)
+			if shallow, serr := gitinfra.IsShallow(ctx, root); serr == nil && shallow {
+				resp["degraded_reasons"] = []string{protocol.DegradedReasonShallowClone}
+			}
+			return resp, nil
 		}
 
 		reason := codeownersAbsenceReason(root)

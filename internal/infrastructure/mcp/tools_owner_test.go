@@ -14,6 +14,7 @@ import (
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 func dispatchOwner(t *testing.T, r *Registry, actor domain.Actor, params map[string]any) (any, *RPCError) {
@@ -28,6 +29,32 @@ func dispatchOwner(t *testing.T, r *Registry, actor domain.Actor, params map[str
 		Params:  raw,
 	}
 	return r.Dispatch(context.Background(), actor, req)
+}
+
+// makeShallowCloneRepo builds a source repo with two commits and returns a
+// --depth=1 clone of it - the shape URL-cloned repos take - for exercising the
+// shallow-history degraded-reason path. file:// is required so git honors
+// --depth on a local path.
+func makeShallowCloneRepo(t *testing.T) string {
+	t.Helper()
+	src := t.TempDir()
+	makeGitRepoWithCommit(t, src, "internal/app.go", "dev@example.com")
+	if err := os.WriteFile(filepath.Join(src, "internal/app.go"), []byte("package main // v2\n"), 0o644); err != nil {
+		t.Fatalf("rewrite: %v", err)
+	}
+	for _, c := range [][]string{
+		{"git", "-C", src, "add", "internal/app.go"},
+		{"git", "-C", src, "commit", "--no-gpg-sign", "-m", "second"},
+	} {
+		if out, err := exec.Command(c[0], c[1:]...).CombinedOutput(); err != nil {
+			t.Fatalf("cmd %v: %v\n%s", c, err, out)
+		}
+	}
+	clone := filepath.Join(t.TempDir(), "clone")
+	if out, err := exec.Command("git", "clone", "--depth=1", "file://"+src, clone).CombinedOutput(); err != nil {
+		t.Fatalf("shallow clone: %v\n%s", err, out)
+	}
+	return clone
 }
 
 func makeGitRepoWithCommit(t *testing.T, dir, filePath, authorEmail string) {
@@ -223,6 +250,68 @@ func TestFindOwner_GitBlameFallback(t *testing.T) {
 	}
 	if m["source"] != "git_blame" {
 		t.Errorf("expected source=git_blame, got %v", m["source"])
+	}
+}
+
+// TestFindOwner_ShallowCloneDegradesBlameNotCodeowners verifies that on a
+// depth=1 clone the git_blame answer carries the shallow degraded reason (blame
+// resolves to the clone-commit author, not the real one) while the
+// history-independent CODEOWNERS answer does not.
+func TestFindOwner_ShallowCloneDegradesBlameNotCodeowners(t *testing.T) {
+	clone := makeShallowCloneRepo(t)
+
+	r := NewRegistry()
+	RegisterOwnerTools(r, nil, nil)
+	actor := domain.Actor{ID: "agent:bot", Kind: domain.ActorKindAgent}
+
+	hasShallowReason := func(m map[string]any) bool {
+		rs, _ := m["degraded_reasons"].([]any)
+		for _, x := range rs {
+			if s, _ := x.(string); s == protocol.DegradedReasonShallowClone {
+				return true
+			}
+		}
+		return false
+	}
+	asMap := func(v any) map[string]any {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		return m
+	}
+
+	// git_blame path: degraded.
+	res, rpcErr := dispatchOwner(t, r, actor, map[string]any{"file_path": "internal/app.go", "repo_id": clone})
+	if rpcErr != nil {
+		t.Fatalf("blame dispatch: %v", rpcErr.Message)
+	}
+	m := asMap(res)
+	if m["source"] != "git_blame" {
+		t.Fatalf("expected source=git_blame, got %v", m["source"])
+	}
+	if !hasShallowReason(m) {
+		t.Errorf("expected degraded_reasons to contain %q, got %v", protocol.DegradedReasonShallowClone, m["degraded_reasons"])
+	}
+
+	// CODEOWNERS path is history-independent: must NOT be flagged even when shallow.
+	if err := os.WriteFile(filepath.Join(clone, "CODEOWNERS"), []byte("*.go @go-team\n"), 0o644); err != nil {
+		t.Fatalf("write CODEOWNERS: %v", err)
+	}
+	res2, rpcErr := dispatchOwner(t, r, actor, map[string]any{"file_path": "internal/app.go", "repo_id": clone})
+	if rpcErr != nil {
+		t.Fatalf("codeowners dispatch: %v", rpcErr.Message)
+	}
+	m2 := asMap(res2)
+	if m2["source"] != "codeowners" {
+		t.Fatalf("expected source=codeowners, got %v", m2["source"])
+	}
+	if _, ok := m2["degraded_reasons"]; ok {
+		t.Errorf("CODEOWNERS path must not be degraded on a shallow clone, got %v", m2["degraded_reasons"])
 	}
 }
 
