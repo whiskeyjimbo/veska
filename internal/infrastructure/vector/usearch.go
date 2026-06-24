@@ -137,7 +137,16 @@ type UsearchStore struct {
 	// behavior: indexExpansionAdd and serial (1) build.
 	expansionAdd uint
 	buildThreads uint
+
+	// hydratedFromDisk is set when Open loaded a complete clean-shutdown
+	// snapshot from sidecars, so the daemon can skip the SQL rehydrate rebuild.
+	hydratedFromDisk bool
 }
+
+// HydratedFromDisk reports whether this store was loaded from a clean-shutdown
+// sidecar snapshot at Open. When true the index already matches the durable
+// node_embeddings table, so the daemon skips the (expensive) boot rehydrate.
+func (s *UsearchStore) HydratedFromDisk() bool { return s.hydratedFromDisk }
 
 // DeleteNodes drops the given node_ids from every index matching (repoID,
 // branch). It untracks them in the metadata maps - the same mechanism upsert
