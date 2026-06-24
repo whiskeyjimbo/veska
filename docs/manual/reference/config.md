@@ -27,6 +27,7 @@ Veska's state lives under `~/.veska/` (override with `VESKA_HOME`). Configuratio
 | `VESKA_HUB_THRESHOLD` | Blast-radius hub-degree threshold (integer). |
 | `VESKA_OLLAMA_URL` | Ollama base URL for the optional LLM features - review pipeline and per-node summaries (default `http://localhost:11434`). |
 | `VESKA_OTLP_ENDPOINT` | OTLP endpoint for tracing export (required when tracing is enabled). |
+| `VESKA_USEARCH_INDEX_PROFILE` | TODO: document this variable. |
 | `VESKA_VECTOR_BACKEND` | Vector store backend: `memory` (default) or `usearch`. |
 
 A new `VESKA_*` env var that lands in the config source without a row here makes `make docs-gen` regenerate this page; CI then fails the staleness check until the page is committed.
