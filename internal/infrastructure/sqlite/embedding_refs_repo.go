@@ -323,6 +323,58 @@ func (r *EmbeddingRefsRepo) LookupExisting(ctx context.Context, contentHash stri
 	return blob, dim, true, nil
 }
 
+// LookupExistingBatch fetches the content-addressed embeddings for many hashes
+// in one query per chunk, replacing the per-row LookupExisting N+1 in the embed
+// classify loop (the dominant cost of the SQL-bound cold-scan drain). Hashes
+// with no stored embedding are simply absent from the returned map; a nil/empty
+// input returns a nil map. Chunked under SQLite's 999-variable limit so a large
+// tuned batch size can't overflow the IN clause.
+func (r *EmbeddingRefsRepo) LookupExistingBatch(ctx context.Context, hashes []string) (map[string]ports.ExistingEmbedding, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	const chunk = 900
+	out := make(map[string]ports.ExistingEmbedding, len(hashes))
+	for start := 0; start < len(hashes); start += chunk {
+		end := min(start+chunk, len(hashes))
+		group := hashes[start:end]
+
+		placeholders := make([]byte, 0, len(group)*2-1)
+		args := make([]any, 0, len(group))
+		for i, h := range group {
+			if i > 0 {
+				placeholders = append(placeholders, ',')
+			}
+			placeholders = append(placeholders, '?')
+			args = append(args, h)
+		}
+		rows, err := r.readDB.QueryContext(ctx,
+			`SELECT content_hash, embedding, dim FROM node_embeddings WHERE content_hash IN (`+string(placeholders)+`)`,
+			args...,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("embedding_refs: lookup existing batch: %w", err)
+		}
+		for rows.Next() {
+			var h string
+			var e ports.ExistingEmbedding
+			if err := rows.Scan(&h, &e.Embedding, &e.Dim); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("embedding_refs: scan existing batch: %w", err)
+			}
+			out[h] = e
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("embedding_refs: iterate existing batch: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return nil, fmt.Errorf("embedding_refs: close existing batch: %w", err)
+		}
+	}
+	return out, nil
+}
+
 // Reuse updates a pending reference to ready using an existing embedding hash. It
 // targets only pending rows to prevent concurrent callers from regressing a
 // reference that has already transitioned to another state.

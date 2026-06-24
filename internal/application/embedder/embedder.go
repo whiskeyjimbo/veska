@@ -59,6 +59,10 @@ type EmbedRefQueue interface {
 	FetchPending(ctx context.Context, limit int) ([]ports.PendingEmbedRef, error)
 	CountPending(ctx context.Context) (int, error)
 	LookupExisting(ctx context.Context, contentHash string) (embedding []byte, dim int, found bool, err error)
+	// LookupExistingBatch resolves many content hashes in one query, replacing the
+	// per-row LookupExisting N+1 in classify - the dominant cost once embed compute
+	// is parallel. Missing hashes are absent from the map.
+	LookupExistingBatch(ctx context.Context, hashes []string) (map[string]ports.ExistingEmbedding, error)
 	// ApplyEmbedBatch flushes a whole drain batch's writes in one transaction:
 	// unique embedding inserts, ready-ref flips (fresh + dedup hits), and
 	// attempt bumps for failures. Replaces the per-row MarkReady/Reuse/
@@ -371,12 +375,34 @@ func (w *Worker) classify(ctx context.Context, pending []ports.PendingEmbedRef) 
 		uniqueByHash: make(map[string]int),
 	}
 
-	for _, ref := range pending {
+	// Hash every ref once, then resolve all already-stored hashes in a single
+	// batch query instead of one LookupExisting per ref (the N+1 that dominates
+	// the SQL-bound drain). On a lookup error, fall back to an empty map: the
+	// affected refs route to needsEmbed and re-embed, which is correct (the
+	// ON CONFLICT DO NOTHING insert dedups), just slower - matching the prior
+	// per-row code's swallow-and-reembed behavior.
+	hashes := make([]string, len(pending))
+	distinct := make([]string, 0, len(pending))
+	seen := make(map[string]struct{}, len(pending))
+	for i, ref := range pending {
+		h := hashEmbedText(job.modelID, ref.Text)
+		hashes[i] = h
+		if _, ok := seen[h]; !ok {
+			seen[h] = struct{}{}
+			distinct = append(distinct, h)
+		}
+	}
+	existing, err := w.refs.LookupExistingBatch(ctx, distinct)
+	if err != nil {
+		existing = nil
+	}
+
+	for i, ref := range pending {
 		if ctx.Err() != nil {
 			return job
 		}
 
-		contentHash := hashEmbedText(job.modelID, ref.Text)
+		contentHash := hashes[i]
 
 		// Fast path 1: this pass already embedded this exact key. The ref
 		// flip is deferred into the batch's ApplyEmbedBatch (no insert - the
@@ -389,9 +415,10 @@ func (w *Worker) classify(ctx context.Context, pending []ports.PendingEmbedRef) 
 		}
 
 		// Fast path 2: a prior pass already embedded this key - the bytes
-		// are in node_embeddings. Flip deferred; no insert needed.
-		if blob, dim, found, err := w.refs.LookupExisting(ctx, contentHash); err == nil && found {
-			vec := veccodec.DecodeFloat32LE(blob, dim)
+		// are in node_embeddings (resolved by the batch lookup above). Flip
+		// deferred; no insert needed.
+		if e, ok := existing[contentHash]; ok {
+			vec := veccodec.DecodeFloat32LE(e.Embedding, e.Dim)
 			job.inFlight[contentHash] = vec
 			job.readyRefs = append(job.readyRefs, ports.EmbedReadyRef{NodeID: ref.NodeID, ContentHash: contentHash})
 			w.dedupHit()

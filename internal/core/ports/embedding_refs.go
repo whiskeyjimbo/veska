@@ -36,6 +36,15 @@ type EmbedInsert struct {
 	Embedding   []byte
 }
 
+// ExistingEmbedding is a content-addressed embedding already stored in
+// node_embeddings, returned by the batch lookup the embed classify stage uses to
+// skip re-embedding known hashes. The raw LE-encoded bytes plus dim let the
+// caller decode without a second query.
+type ExistingEmbedding struct {
+	Embedding []byte
+	Dim       int
+}
+
 // EmbedReadyRef flips one node_embedding_refs row to state='ready' against an
 // already-stored embedding - either a row freshly inserted in the same batch
 // or a content-addressed dedup hit.
