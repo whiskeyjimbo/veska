@@ -15,7 +15,7 @@ import (
 // are loaded, resulting in an empty but fully functional store.
 func TestOpen_NativeEmptyDirSucceeds(t *testing.T) {
 	dir := t.TempDir()
-	store, err := vector.Open(dir)
+	store, err := vector.Open(dir, vector.Options{})
 	if err != nil {
 		t.Fatalf("Open(%q) returned unexpected error: %v", dir, err)
 	}

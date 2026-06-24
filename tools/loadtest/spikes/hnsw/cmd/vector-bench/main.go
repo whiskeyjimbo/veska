@@ -101,7 +101,7 @@ func main() {
 func run(pop int) (result, error) {
 	ctx := context.Background()
 
-	store, err := vector.NewUsearchStore()
+	store, err := vector.NewUsearchStore(vector.Options{})
 	if err != nil {
 		return result{}, fmt.Errorf("NewUsearchStore: %w", err)
 	}

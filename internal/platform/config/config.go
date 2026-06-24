@@ -130,10 +130,16 @@ type StorageConfig struct {
 	IdleCheckpointAfter string `toml:"idle_checkpoint_after"`
 	VectorBackend       string `toml:"vector_backend"`
 
+	// UsearchIndexProfile trades usearch HNSW build-speed against recall:
+	// "default" (serial/ef64, historical), "accurate" (serial/wide-beam),
+	// "balanced" or "fast" (parallel build). Ignored by the memvec backend;
+	// resolved to build options by vector.OptionsForProfile.
+	UsearchIndexProfile string `toml:"usearch_index_profile"`
+
 	// MemoryPressureFloorMiB is the available-RAM floor (MiB) below which the
 	// daemon defers its deferrable post-promotion queue lanes (auto_link/fts/
 	// revalidate) to avoid OOM with the in-memory `memvec` backend. The embedder
-	// is NOT throttled by this (it drains regardless; solov2-b5aw). 0 uses the
+	// is NOT throttled by this (it drains regardless). 0 uses the
 	// built-in default (512 MiB). Lower it on hosts with little headroom that
 	// still want the lanes to run.
 	MemoryPressureFloorMiB int `toml:"memory_pressure_floor_mib"`
@@ -163,7 +169,7 @@ type WatcherConfig struct {
 // override), not by this block. Endpoint/Model carry the VESKA_OLLAMA_URL /
 // VESKA_EMBED_MODEL env values consumed when Ollama is elected. A removed
 // rate_per_sec key is silently ignored: throughput is now bounded by the
-// embedder's greedy drain + Governor, not a fixed rate (solov2-fi42).
+// embedder's greedy drain + Governor, not a fixed rate.
 type EmbedderConfig struct {
 	Endpoint string `toml:"endpoint"`
 	Model    string `toml:"model"`
@@ -266,6 +272,7 @@ func DefaultConfig() Config {
 			WALAutocheckpoint:        1000,
 			IdleCheckpointAfter:      "5s",
 			VectorBackend:            "memory",
+			UsearchIndexProfile:      "default",
 			VerifyMigrationIntegrity: false,
 		},
 		Watcher: WatcherConfig{
@@ -368,6 +375,9 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	if v := os.Getenv("VESKA_VECTOR_BACKEND"); v != "" {
 		cfg.Storage.VectorBackend = v
+	}
+	if v := os.Getenv("VESKA_USEARCH_INDEX_PROFILE"); v != "" {
+		cfg.Storage.UsearchIndexProfile = v
 	}
 	if v := os.Getenv("VESKA_DEBUG"); v != "" && v != "0" {
 		cfg.Logging.Level = "debug"

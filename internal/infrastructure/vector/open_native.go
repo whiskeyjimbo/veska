@@ -12,8 +12,8 @@ import "github.com/whiskeyjimbo/veska/internal/core/ports"
 // an empty (but functional) store is returned.
 // If Load fails, Destroy is called to release CGo memory before returning the
 // error.
-func openNative(veskaHome string) (ports.VectorStorage, error) {
-	store, err := NewUsearchStore()
+func openNative(veskaHome string, opts Options) (ports.VectorStorage, error) {
+	store, err := NewUsearchStore(opts)
 	if err != nil {
 		return nil, err
 	}

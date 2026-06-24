@@ -32,7 +32,7 @@ const (
 // generated vectors for performance evaluation.
 func buildStore(tb testing.TB, n int) (*vector.UsearchStore, [][]float32) {
 	tb.Helper()
-	store, err := vector.NewUsearchStore()
+	store, err := vector.NewUsearchStore(vector.Options{})
 	if err != nil {
 		tb.Fatalf("NewUsearchStore: %v", err)
 	}

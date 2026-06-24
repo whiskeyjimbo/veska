@@ -21,6 +21,12 @@ const (
 	indexConnectivity    = 16
 	indexExpansionAdd    = 64 // An expansion factor of 64 is the practical default because higher values are slower with negligible recall gain.
 	indexExpansionSearch = 100
+
+	// parallelAddMin is the batch size below which the parallel build falls back
+	// to a serial loop - goroutine fan-out overhead outweighs the gain on tiny
+	// batches (e.g. the ~32-row cold-scan embed lane). Only big-batch boot
+	// rehydrate (~13k+) clears this and pays for the fan-out.
+	parallelAddMin = 256
 )
 
 // indexKey uniquely identifies an HNSW index partitioned by repository, branch, and model.
@@ -49,7 +55,10 @@ type indexEntry struct {
 	capacity uint
 }
 
-func newIndexEntry() (*indexEntry, error) {
+// newIndexEntry builds one native HNSW index. expansionAdd is the construction
+// beam (ef_construction); buildThreads, when >1, tells usearch to size per-thread
+// scratch buffers so concurrent idx.Add calls (the parallel build path) are safe.
+func newIndexEntry(expansionAdd, buildThreads uint) (*indexEntry, error) {
 	conf := usearchlib.IndexConfig{
 		Dimensions: indexDim,
 		Metric:     usearchlib.L2sq,
@@ -61,12 +70,21 @@ func newIndexEntry() (*indexEntry, error) {
 		// multi-million-vector scale.
 		Quantization:    usearchlib.F32,
 		Connectivity:    indexConnectivity,
-		ExpansionAdd:    indexExpansionAdd,
+		ExpansionAdd:    expansionAdd,
 		ExpansionSearch: indexExpansionSearch,
 	}
 	idx, err := usearchlib.NewIndex(conf)
 	if err != nil {
 		return nil, fmt.Errorf("usearch: new index: %w", err)
+	}
+	if buildThreads > 1 {
+		// Cap usearch's internal add-threading to our fan-out width so it
+		// allocates the right number of per-thread scratch buffers; without
+		// this, concurrent idx.Add from N goroutines is unsafe.
+		if err := idx.ChangeThreadsAdd(buildThreads); err != nil {
+			_ = idx.Destroy()
+			return nil, fmt.Errorf("usearch: change threads add %d: %w", buildThreads, err)
+		}
 	}
 	return &indexEntry{
 		idx:      idx,
@@ -89,26 +107,22 @@ func (e *indexEntry) reserve(needed uint) error {
 	return nil
 }
 
-// upsert inserts or replaces a single row in the index. Because the underlying usearch
-// index does not support in-place updates, any pre-existing entry is untracked in the
-// metadata maps and a brand new identifier is generated for the updated vector.
-func (e *indexEntry) upsert(row domain.EmbeddingRow) error {
+// prepareAdd does the serial, Go-side bookkeeping for inserting one row and
+// returns the numeric id the caller must idx.Add the vector under. Because the
+// underlying usearch index has no in-place update, any pre-existing entry is
+// untracked here (its slot becomes a tombstone) and a brand-new id is assigned.
+// The actual idx.Add is deliberately NOT done here so a batch can fan the Adds
+// out concurrently after every id is assigned (see UpsertEmbeddings). Per-row
+// capacity is already covered by the batch pre-reserve in UpsertEmbeddings.
+func (e *indexEntry) prepareAdd(row domain.EmbeddingRow) uint64 {
 	if oldID, exists := e.nodeToID[row.NodeID]; exists {
-		// Remove the old metadata. The obsolete slot in the usearch index is left
-		// as a tombstone because the usearch API does not support deletion.
 		delete(e.rows, oldID)
-	}
-	if err := e.reserve(1); err != nil {
-		return err
 	}
 	id := e.nextID
 	e.nextID++
-	if err := e.idx.Add(id, row.Vector); err != nil {
-		return fmt.Errorf("usearch: add id=%d nodeID=%q: %w", id, row.NodeID, err)
-	}
 	e.rows[id] = rowMeta{NodeID: row.NodeID, ContentHash: row.ContentHash, ModelID: row.ModelID}
 	e.nodeToID[row.NodeID] = id
-	return nil
+	return id
 }
 
 // UsearchStore implements the VectorStorage interface using separate, in-memory usearch
@@ -117,6 +131,12 @@ func (e *indexEntry) upsert(row domain.EmbeddingRow) error {
 type UsearchStore struct {
 	mu      sync.RWMutex
 	indexes map[indexKey]*indexEntry
+
+	// expansionAdd and buildThreads are the resolved build tunables applied to
+	// every index this store creates. Defaults reproduce historical
+	// behavior: indexExpansionAdd and serial (1) build.
+	expansionAdd uint
+	buildThreads uint
 }
 
 // DeleteNodes drops the given node_ids from every index matching (repoID,
@@ -165,10 +185,21 @@ func (s *UsearchStore) MemoryUsage() (uint64, error) {
 // Compile-time check to ensure UsearchStore implements the ports.VectorStorage interface.
 var _ ports.VectorStorage = (*UsearchStore)(nil)
 
-// NewUsearchStore constructs an empty UsearchStore instance.
-func NewUsearchStore() (*UsearchStore, error) {
+// NewUsearchStore constructs an empty UsearchStore. opts.ExpansionAdd of 0
+// falls back to indexExpansionAdd; opts.BuildThreads of 0 means serial build.
+func NewUsearchStore(opts Options) (*UsearchStore, error) {
+	ef := opts.ExpansionAdd
+	if ef == 0 {
+		ef = indexExpansionAdd
+	}
+	threads := opts.BuildThreads
+	if threads == 0 {
+		threads = 1
+	}
 	return &UsearchStore{
-		indexes: make(map[indexKey]*indexEntry),
+		indexes:      make(map[indexKey]*indexEntry),
+		expansionAdd: ef,
+		buildThreads: threads,
 	}, nil
 }
 
@@ -189,7 +220,7 @@ func (s *UsearchStore) getOrCreate(key indexKey) (*indexEntry, error) {
 	if e, ok := s.indexes[key]; ok {
 		return e, nil
 	}
-	e, err := newIndexEntry()
+	e, err := newIndexEntry(s.expansionAdd, s.buildThreads)
 	if err != nil {
 		return nil, err
 	}
@@ -223,13 +254,84 @@ func (s *UsearchStore) UpsertEmbeddings(_ context.Context, repoID, branch string
 		}
 	}
 
+	// Serial pre-pass: assign each row its numeric id, untrack any tombstoned
+	// predecessor, and fill the Go-side maps. All mutation of indexEntry state
+	// (nextID, rows, nodeToID) happens here, single-threaded, so the parallel
+	// phase that follows touches ONLY the thread-safe C index.
+	jobs := make([]addJob, 0, len(batch))
 	for _, row := range batch {
 		key := indexKey{repoID: repoID, branch: branch, modelID: row.ModelID}
-		if err := s.indexes[key].upsert(row); err != nil {
-			return err
+		e := s.indexes[key]
+		id := e.prepareAdd(row)
+		jobs = append(jobs, addJob{e: e, id: id, vec: row.Vector})
+	}
+
+	// The expensive idx.Add calls run while s.mu is still held (deferred Unlock),
+	// so Upsert stays mutually exclusive with Search exactly as before - the
+	// fan-out parallelizes the Adds across cores, it does not widen concurrency.
+	if s.buildThreads <= 1 || len(jobs) < parallelAddMin {
+		for i := range jobs {
+			if err := jobs[i].run(); err != nil {
+				return err
+			}
 		}
+		return nil
+	}
+	return runParallelAdds(jobs, int(s.buildThreads))
+}
+
+// addJob is one pre-assigned (index, id, vector) insertion. Splitting id/map
+// assignment (done serially in prepareAdd) from the idx.Add lets the Adds fan
+// out without racing on Go-side maps.
+type addJob struct {
+	e   *indexEntry
+	id  uint64
+	vec []float32
+}
+
+func (j *addJob) run() error {
+	if err := j.e.idx.Add(j.id, j.vec); err != nil {
+		return fmt.Errorf("usearch: add id=%d: %w", j.id, err)
 	}
 	return nil
+}
+
+// runParallelAdds fans the idx.Add calls across n goroutines over contiguous
+// shards and returns the first error. Insertion order is nondeterministic, so
+// the resulting HNSW graph differs run-to-run (equal quality, calibrated via
+// eval-usearch-profile); this is why parallel build is opt-in.
+func runParallelAdds(jobs []addJob, n int) error {
+	if n > len(jobs) {
+		n = len(jobs)
+	}
+	var (
+		wg       sync.WaitGroup
+		once     sync.Once
+		firstErr error
+	)
+	shard := (len(jobs) + n - 1) / n
+	for w := 0; w < n; w++ {
+		lo := w * shard
+		if lo >= len(jobs) {
+			break
+		}
+		hi := lo + shard
+		if hi > len(jobs) {
+			hi = len(jobs)
+		}
+		wg.Add(1)
+		go func(lo, hi int) {
+			defer wg.Done()
+			for i := lo; i < hi; i++ {
+				if err := jobs[i].run(); err != nil {
+					once.Do(func() { firstErr = err })
+					return
+				}
+			}
+		}(lo, hi)
+	}
+	wg.Wait()
+	return firstErr
 }
 
 // Search returns the k nearest neighbors to the query vector within the specified repository and branch.

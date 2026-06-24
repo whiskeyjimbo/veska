@@ -107,7 +107,7 @@ func main() {
 func runSweep(pop int) (sweepResult, error) {
 	ctx := context.Background()
 
-	store, err := vector.NewUsearchStore()
+	store, err := vector.NewUsearchStore(vector.Options{})
 	if err != nil {
 		return sweepResult{}, fmt.Errorf("NewUsearchStore: %w", err)
 	}

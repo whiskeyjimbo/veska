@@ -18,7 +18,7 @@ func TestOpen_StubReturnsErrVectorStoreUnavailable(t *testing.T) {
 		t.Skip("skipping stub test: hnsw_native build tag is active")
 	}
 
-	store, err := vector.Open(t.TempDir())
+	store, err := vector.Open(t.TempDir(), vector.Options{})
 	if store != nil {
 		t.Errorf("expected nil store from stub path, got %T", store)
 	}

@@ -213,7 +213,12 @@ func (b *daemonBuilder) openStorage() error {
 	// Mirrors the static-embedder WARN in electEmbedder.
 	maybeWarnLowMemory(b.cfg.VectorBackend, b.availMem, slog.Default())
 
-	vec, err := vector.NewVectorStorage(b.cfg.VectorBackend, b.cfg.VeskaHome)
+	vecOpts, err := vector.OptionsForProfile(b.fileCfg.Storage.UsearchIndexProfile)
+	if err != nil {
+		_ = pools.Close()
+		return fmt.Errorf("daemon: vector storage: %w", err)
+	}
+	vec, err := vector.NewVectorStorage(b.cfg.VectorBackend, b.cfg.VeskaHome, vecOpts...)
 	if err != nil {
 		_ = pools.Close()
 		return fmt.Errorf("daemon: open vector storage: %w", err)
@@ -331,13 +336,13 @@ func (b *daemonBuilder) buildEmbedder() error {
 	// The default governor (fixed concurrency 1) suits a single local Ollama
 	// instance and local embedders alike: both serialize internally, so 1 is
 	// the ceiling and the greedy drain reaches it. Hosted-API providers will
-	// elect an adaptive governor here once they land (solov2-fi42).
+	// elect an adaptive governor here once they land.
 	worker, err := embedder.NewWorker(b.refs, b.provider, b.vec,
 		embedder.WithMaxAttempts(embedder.DefaultMaxAttempts),
 		embedder.WithMetrics(b.metrics),
 		// writeBusy, not ingestionBusy: the embedder pauses only to avoid racing
-		// the promotion Write tx (scan/resync), never on memory pressure - that
-		// silent indefinite pause was solov2-b5aw.
+		// the promotion Write tx (scan/resync), never on memory pressure -
+		// pausing there caused a silent indefinite stall.
 		embedder.WithPauser(b.writeBusy),
 	)
 	if err != nil {

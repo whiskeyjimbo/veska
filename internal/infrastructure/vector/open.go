@@ -18,6 +18,6 @@ var ErrVectorStoreUnavailable = errors.New(
 // from veskaHome, and returns the store ready for use. The returned ports.VectorStorage
 // is a *UsearchStore; callers that need to call Destroy must assert the concrete type.
 // When compiled without the hnsw_native build tag, this function always returns ErrVectorStoreUnavailable.
-func Open(veskaHome string) (ports.VectorStorage, error) {
-	return openNative(veskaHome)
+func Open(veskaHome string, opts Options) (ports.VectorStorage, error) {
+	return openNative(veskaHome, opts)
 }

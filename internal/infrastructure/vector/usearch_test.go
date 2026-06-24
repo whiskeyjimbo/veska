@@ -28,7 +28,7 @@ func randVec(seed int64) []float32 {
 
 func newStore(t *testing.T) *vector.UsearchStore {
 	t.Helper()
-	s, err := vector.NewUsearchStore()
+	s, err := vector.NewUsearchStore(vector.Options{})
 	if err != nil {
 		t.Fatalf("NewUsearchStore: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestUpsertAndLookup(t *testing.T) {
 }
 
 // TestSearch verifies that searching the store returns the requested number of nearest neighbor hits with non-negative similarity scores.
-// TestDeleteNodesRemovesFromSearch is the usearch half of solov2-524u: a
+// TestDeleteNodesRemovesFromSearch is the usearch half of dropped-node eviction: a
 // deleted node must stop surfacing in Search and LookupContentHashes.
 func TestDeleteNodesRemovesFromSearch(t *testing.T) {
 	ctx := context.Background()
@@ -144,6 +144,66 @@ func TestSearch(t *testing.T) {
 		if h.Score < 0 {
 			t.Errorf("hit %q: score %f is negative", h.NodeID, h.Score)
 		}
+	}
+}
+
+// TestParallelBuildIntegrity exercises the parallel build path (BuildThreads>1
+// with a batch above parallelAddMin): the serial pre-pass assigns ids/maps and
+// the idx.Add calls fan out across goroutines. Run under -race, it guards the
+// fan-out against drops, duplicates, and map races. It deliberately checks COUNT
+// integrity + self-retrieval only, NOT recall - parallel insertion yields a
+// different but equal-quality graph, and recall parity is gated separately on
+// real embeddings by the eval-usearch-profile sweep (random vectors here would
+// mask the very recall regression that sweep exists to catch).
+func TestParallelBuildIntegrity(t *testing.T) {
+	ctx := context.Background()
+	s, err := vector.NewUsearchStore(vector.Options{BuildThreads: 4, ExpansionAdd: 128})
+	if err != nil {
+		t.Fatalf("NewUsearchStore: %v", err)
+	}
+	t.Cleanup(func() { s.Destroy() })
+
+	// n well above parallelAddMin (256) so the fan-out actually fires.
+	const n = 2000
+	batch := make([]domain.EmbeddingRow, n)
+	nodeIDs := make([]string, n)
+	for i := 0; i < n; i++ {
+		id := fmt.Sprintf("node-%d", i)
+		nodeIDs[i] = id
+		batch[i] = domain.EmbeddingRow{
+			NodeID:      id,
+			ContentHash: fmt.Sprintf("hash-%d", i),
+			ModelID:     "nomic-embed-text",
+			Vector:      randVec(int64(i)),
+		}
+	}
+	if err := s.UpsertEmbeddings(ctx, "repo-1", "main", batch); err != nil {
+		t.Fatalf("UpsertEmbeddings: %v", err)
+	}
+
+	// Count integrity: every node is present exactly once, none dropped or duped.
+	hashes, err := s.LookupContentHashes(ctx, "repo-1", "main", nodeIDs)
+	if err != nil {
+		t.Fatalf("LookupContentHashes: %v", err)
+	}
+	if len(hashes) != n {
+		t.Fatalf("count integrity: want %d nodes, got %d", n, len(hashes))
+	}
+
+	// Self-retrieval: each vector finds itself as the nearest neighbour. HNSW is
+	// approximate, so allow a small miss tolerance rather than demanding 100%.
+	misses := 0
+	for i, id := range nodeIDs {
+		hits, err := s.Search(ctx, "repo-1", "main", batch[i].Vector, 1, domain.VectorFilter{ModelID: "nomic-embed-text"})
+		if err != nil {
+			t.Fatalf("Search %q: %v", id, err)
+		}
+		if len(hits) == 0 || hits[0].NodeID != id {
+			misses++
+		}
+	}
+	if maxMiss := n / 100; misses > maxMiss {
+		t.Fatalf("self-retrieval: %d/%d misses exceeds tolerance %d (graph corrupted by parallel build?)", misses, n, maxMiss)
 	}
 }
 

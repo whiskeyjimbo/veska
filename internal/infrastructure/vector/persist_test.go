@@ -63,7 +63,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 
 	// Load the saved index into a fresh store instance.
-	store2, err := vector.NewUsearchStore()
+	store2, err := vector.NewUsearchStore(vector.Options{})
 	if err != nil {
 		t.Fatalf("NewUsearchStore (store2): %v", err)
 	}
@@ -114,7 +114,7 @@ func TestSaveLoadRoundTripHyphenatedKeys(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	store2, err := vector.NewUsearchStore()
+	store2, err := vector.NewUsearchStore(vector.Options{})
 	if err != nil {
 		t.Fatalf("NewUsearchStore: %v", err)
 	}
