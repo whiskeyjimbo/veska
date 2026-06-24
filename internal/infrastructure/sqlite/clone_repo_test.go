@@ -108,7 +108,7 @@ func TestCloneRepo_GroupsSharedHashes(t *testing.T) {
 	}
 }
 
-// TestCloneRepo_EmptyHashesDoNotGroup pins solov2-ozoi.2: nodes whose
+// TestCloneRepo_EmptyHashesDoNotGroup pins empty-hash clone grouping: nodes whose
 // content_hash is ” (the index path leaves it empty when no hash is computed)
 // must NOT be bucketed together as byte-identical clones. A genuine hashed pair
 // alongside proves real grouping still works.

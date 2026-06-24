@@ -175,7 +175,7 @@ func TestSearchMergesPartitions(t *testing.T) {
 	}
 }
 
-// TestSearchAllocsIndependentOfN is the regression guard for solov2-jncy: the
+// TestSearchAllocsIndependentOfN is the regression guard for O(k) query allocation: the
 // per-query allocation must be O(k), not O(N). Allocs/op for a large corpus must
 // not exceed those for a small corpus (both bounded by the heap + result slice).
 func TestSearchAllocsIndependentOfN(t *testing.T) {

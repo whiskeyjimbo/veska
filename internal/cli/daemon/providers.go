@@ -318,7 +318,7 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 	// memory_pressure: the deferrable post-promotion lanes (auto_link/fts/
 	// revalidate) are throttled because free RAM is below the floor. Embedding
 	// is NOT throttled by this. Surfacing it explains a non-zero pending_fts that
-	// would otherwise look stuck (solov2-b5aw). When it coincides with pending
+	// would otherwise look stuck. When it coincides with pending
 	// work, flag the rollup so the cause is visible, not silent.
 	memPressure := sp.pressure != nil && sp.pressure()
 	if memPressure && (pendingFTS > 0 || pendingEmbeds > 0) {

@@ -56,7 +56,7 @@ func TestUpsertAndSearch(t *testing.T) {
 }
 
 // TestUpsertReplaces verifies that upserting an existing node identifier replaces the row and updates the vector.
-// TestDeleteNodesRemovesFromSearch is the regression for solov2-524u: a deleted
+// TestDeleteNodesRemovesFromSearch is the regression for dropped-node eviction: a deleted
 // node's vector must stop appearing as a scan candidate without a daemon restart.
 func TestDeleteNodesRemovesFromSearch(t *testing.T) {
 	s := memvec.New()

@@ -7,7 +7,7 @@
 // Scope (m3.02.1): correctness of the loop. m3.02.3 added retry policy,
 // m3.02.4 added content-addressed dedup that skips the EmbeddingProvider.Embed
 // call when the (modelID, embed_text) hash already has a row in
-// node_embeddings. solov2-fi42 replaced the fixed token-bucket rate limiter
+// node_embeddings. A later change replaced the fixed token-bucket rate limiter
 // (which was dominated by - and effectively inert behind - the poll interval)
 // with a greedy drain bounded by a Governor: the loop runs passes back-to-back
 // while the queue stays full, and embeds up to Governor.Limit() batches

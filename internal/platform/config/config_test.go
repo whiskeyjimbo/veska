@@ -53,7 +53,7 @@ func TestLoadDecodesFileOverridesDefaults(t *testing.T) {
 	t.Setenv("VESKA_HOME", dir)
 	clearOverrideEnv(t)
 
-	// The stale rate_per_sec key (removed in solov2-fi42) must be silently
+	// The stale rate_per_sec key (since removed) must be silently
 	// ignored, not break Load - existing config files still carry it.
 	toml := `
 [embedder]

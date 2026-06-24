@@ -19,7 +19,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/memvec"
 )
 
-// TestPromote_PrunesDroppedNodeVectors is the integration half of solov2-524u:
+// TestPromote_PrunesDroppedNodeVectors is the integration half of dropped-node vector pruning:
 // when a re-promote drops a symbol, the promote path evicts its vector from the
 // store so it stops surfacing in search, without a daemon restart.
 func TestPromote_PrunesDroppedNodeVectors(t *testing.T) {

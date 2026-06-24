@@ -770,7 +770,7 @@ func TestWorker_GaugeTracksPending(t *testing.T) {
 }
 
 // TestWorker_GaugeTracksConcurrencyLimit verifies the worker publishes the
-// governor's limit so the calibration is observable (solov2-fi42 AC).
+// governor's limit so the calibration is observable.
 func TestWorker_GaugeTracksConcurrencyLimit(t *testing.T) {
 	db := openSchemaDB(t)
 	repo := infsqlite.NewEmbeddingRefsRepo(db, db)
@@ -821,7 +821,7 @@ func readGauge(g prometheus.Gauge) float64 {
 }
 
 // TestWorker_GreedyDrainBeatsInterval is the throughput regression test for
-// solov2-fi42. The interval is the IDLE cadence only: a backlog larger than a
+// the greedy drain. The interval is the IDLE cadence only: a backlog larger than a
 // batch must drain in back-to-back passes, NOT one batch per interval. With a
 // 60s interval and 5 full batches of backlog, the prior one-batch-per-tick
 // loop would have needed ~5 intervals (~5 minutes); the greedy drain finishes

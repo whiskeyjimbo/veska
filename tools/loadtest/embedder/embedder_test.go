@@ -7,7 +7,7 @@
 // for a measurement window and assert sustained throughput is at or above the
 // gate-1 floor (5 emb/s, see M3.md exit gates).
 // What this measures: the WORKER's sustained output rate - i.e. the rate that
-// production observes. Since solov2-fi42 the worker greedy-drains under a
+// production observes. The worker greedy-drains under a
 // concurrency Governor instead of a fixed rate limiter, so throughput is
 // bounded by Ollama capacity, not an artificial cap. The gate floor is 5
 // emb/s; a rate at or below the floor points at Ollama, not the worker.

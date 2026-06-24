@@ -90,7 +90,7 @@ func maybeWarnLowMemory(backend vector.BackendKind, avail availMemFunc, logger *
 
 // pressureGate wraps underMemoryPressure with edge-triggered logging so the
 // memory-pressure throttle on the post-promotion queue lanes is diagnosable
-// rather than a silent indefinite stall (solov2-b5aw). busy() is polled every
+// rather than a silent indefinite stall. busy() is polled every
 // ~250ms from the queue poller goroutine; it logs only on the rising edge
 // (pressure engages) and the falling edge (clears), never per-tick. active is
 // guarded so concurrent callers stay race-free.
@@ -133,8 +133,8 @@ func (g *pressureGate) busy() bool {
 //     embedder skips its tick on this so it can't race the promotion Write tx
 //     into SQLITE_BUSY. It deliberately excludes memory pressure - pausing
 //     embedding does not free the resident memvec index or the cold-scan working
-//     set (the real RAM hogs), it only stalls semantic search on a tight host
-//     (solov2-b5aw); embedding is bounded per batch and drains regardless.
+//     set (the real RAM hogs), it only stalls semantic search on a tight host;
+//     embedding is bounded per batch and drains regardless.
 //   - ingestionBusy adds the memory-pressure guard on top of writeBusy and gates
 //     only the deferrable post-promotion queue lanes. The pressureGate logs the
 //     rising/falling edge so the throttle is no longer a silent stall.

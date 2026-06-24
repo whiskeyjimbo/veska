@@ -197,7 +197,7 @@ func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
 // TestStatusProvider_MemoryPressureSurfaced pins that the memory_pressure field
 // reflects the injected predicate, and that it flags degraded (with the
 // 'memory_pressure' reason) only when it coincides with pending work - so the
-// otherwise-silent queue-lane deferral is visible in eng_get_status (solov2-b5aw).
+// otherwise-silent queue-lane deferral is visible in eng_get_status.
 func TestStatusProvider_MemoryPressureSurfaced(t *testing.T) {
 	db := providersTestDB(t)
 	if _, err := db.Exec(`INSERT INTO schema_migrations (version) VALUES (1)`); err != nil {

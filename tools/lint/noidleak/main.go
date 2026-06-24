@@ -3,9 +3,9 @@
 // Command noidleak fails the build when internal bd issue IDs
 // leak into user-visible Go string literals - cobra flag descriptions,
 // fmt.Printf format strings, MCP tool descriptions, generated docs.
-// Background: bd issue IDs are useful breadcrumbs in code comments (where
-// they tag the commit history) but read as cryptic noise when they reach
-// help text or wiki pages. The lint exists because a junior-eng journey
+// Background: bd issue IDs read as cryptic noise when they reach help text or
+// wiki pages - the linkage belongs in the bead, not in user-visible output (and
+// not in code comments either). The lint exists because a junior-eng journey
 // kept tripping over leaked IDs in init output, flag help,
 // and entry_points.md.
 // Walks every.go file under cmd/ and internal/ (skipping _test.go), parses
@@ -60,8 +60,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "  "+v)
 		}
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "These reach --help text, generated docs, and tool descriptions. Move the")
-		fmt.Fprintln(os.Stderr, "id into a code comment (// solov2-xxxx) instead.")
+		fmt.Fprintln(os.Stderr, "These reach --help text, generated docs, and tool descriptions. Drop the")
+		fmt.Fprintln(os.Stderr, "id from the string - the bead linkage lives in bd, not in code.")
 		os.Exit(1)
 	}
 }

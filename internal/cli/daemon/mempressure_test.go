@@ -75,7 +75,7 @@ func TestIngestionBusyPredicate_MemoryPressure(t *testing.T) {
 	}
 }
 
-// TestWriteBusyExcludesMemoryPressure pins the solov2-b5aw fix: the embedder's
+// TestWriteBusyExcludesMemoryPressure pins the write-busy fix: the embedder's
 // pauser (writeBusy) must NOT pause on memory pressure - only on scan/resync
 // write-contention - so embeddings keep draining instead of stalling silently
 // and indefinitely on a memory-tight host. The queue-lane pauser (ingestionBusy)
