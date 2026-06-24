@@ -43,13 +43,20 @@ func (d *Daemon) Start(ctx context.Context) error {
 		}
 
 		d.startMetricsListener()
+		// Wire the watcher's parent context before the MCP socket opens. The
+		// server is served in a goroutine and immediately accepts repo-add
+		// requests, whose watchAdd path calls startRepoWatch -> context.WithCancel
+		// on this ctx; a scripted boot+add against a home with an existing repo
+		// (slow rehydrateVectors below) otherwise races into a nil m.ctx panic.
+		// Start is a pure context assignment - no goroutine, no deps on the lines
+		// between here and the original site (solov2-bihz).
+		d.watcher.Start(d.ctx)
 		d.startMCPServer()
 		d.awaitListenerSockets()
 		d.rehydrateVectors()
 
 		d.embed.Start(d.ctx)
 		d.poller.Start(d.ctx)
-		d.watcher.Start(d.ctx)
 		d.seedWatcher()
 		d.startReconciler()
 

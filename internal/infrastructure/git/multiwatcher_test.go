@@ -43,6 +43,30 @@ func TestMultiRepoWatcherAdd(t *testing.T) {
 	}
 }
 
+// TestMultiRepoWatcherAddBeforeStart guards solov2-bihz: a repo-add that races
+// ahead of Start (m.ctx still nil) must not panic on context.WithCancel(nil).
+// The watcher falls back to a background context and stays functional.
+func TestMultiRepoWatcherAddBeforeStart(t *testing.T) {
+	t.Parallel()
+
+	mw := git.NewMultiRepoWatcher()
+	// Deliberately skip Start() to reproduce the boot race window.
+	dir := t.TempDir()
+
+	if err := mw.Add("repoEarly", dir); err != nil {
+		t.Fatalf("Add before Start: %v", err)
+	}
+
+	ids := mw.WatchedRepoIDs()
+	if len(ids) != 1 || ids[0] != "repoEarly" {
+		t.Fatalf("WatchedRepoIDs after early Add = %v, want [repoEarly]", ids)
+	}
+
+	if err := mw.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
 // TestMultiRepoWatcherRemove verifies that repositories can be successfully removed without errors or panics.
 func TestMultiRepoWatcherRemove(t *testing.T) {
 	t.Parallel()
