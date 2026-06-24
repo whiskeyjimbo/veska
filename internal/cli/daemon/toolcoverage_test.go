@@ -1565,6 +1565,7 @@ func wikiFamily() []coverageTool {
 			if helper == nil {
 				t.Fatalf("helper.go not ranked (degraded=%v hint=%q zones=%+v)",
 					resp.DegradedReasons, resp.Hint, resp.Zones)
+				return
 			}
 			if helper.RecentChangeFrequency < 2 {
 				t.Errorf("helper.go RecentChangeFrequency=%d, want >= 2", helper.RecentChangeFrequency)

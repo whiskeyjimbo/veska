@@ -43,6 +43,7 @@ func TestDispatch_FlatUnknownParamRejected(t *testing.T) {
 	_, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "eng_find_changed_symbols", Params: params})
 	if rpcErr == nil {
 		t.Fatal("expected RPCError for unknown param, got nil")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected code %d, got %d", CodeInvalidParams, rpcErr.Code)
@@ -61,6 +62,7 @@ func TestDispatch_ToolsCallUnknownParamRejected(t *testing.T) {
 	_, rpcErr := r.Dispatch(context.Background(), domain.Actor{}, &Request{Method: "tools/call", Params: wrapped})
 	if rpcErr == nil {
 		t.Fatal("expected RPCError, got nil")
+		return
 	}
 	if rpcErr.Code != CodeInvalidParams {
 		t.Errorf("expected -32602, got %d", rpcErr.Code)
