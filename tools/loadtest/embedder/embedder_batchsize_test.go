@@ -27,10 +27,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/embedding/model2vec"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/vector/memvec"
+	"github.com/whiskeyjimbo/veska/internal/platform/observability"
 )
 
 type armResult struct {
@@ -139,10 +141,17 @@ func runDrainArm(t *testing.T, dir string, n, batchSize int, syncMode string, go
 		t.Fatalf("model2vec.New: %v", err)
 	}
 	vectors := memvec.New()
-	worker, err := embedder.NewWorker(refs, provider, vectors,
+	workerOpts := []embedder.Option{
 		embedder.WithBatchSize(batchSize),
 		embedder.WithGovernor(embedder.NewFixedGovernor(gomaxprocs)),
-	)
+	}
+	// EMBED_METRICS=1 wires a real Metrics so the worker exercises the
+	// per-pass EmbedQueueDepth gauge path (off by default in production and in
+	// this harness) - used to A/B the gauge-throttle change.
+	if os.Getenv("EMBED_METRICS") == "1" {
+		workerOpts = append(workerOpts, embedder.WithMetrics(observability.NewMetrics(prometheus.NewRegistry())))
+	}
+	worker, err := embedder.NewWorker(refs, provider, vectors, workerOpts...)
 	if err != nil {
 		t.Fatalf("NewWorker: %v", err)
 	}

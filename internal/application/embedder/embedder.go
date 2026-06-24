@@ -42,6 +42,10 @@ const DefaultBatchSize = 32
 // post_promotion_queue Poller default so back-pressure characteristics line up.
 const DefaultInterval = 250 * time.Millisecond
 
+// depthGaugeInterval bounds how often the worker runs the O(pending)
+// CountPending behind the EmbedQueueDepth gauge during a greedy drain.
+const depthGaugeInterval = time.Second
+
 // DefaultMaxAttempts is the per-row retry budget. After this many Embed
 // failures on the same row, MarkAttemptFailed flips the row to
 // state='failed' and FetchPending stops returning it. Overridable via
@@ -96,6 +100,12 @@ type Worker struct {
 	// resync path is committing on Write ( - closes the
 	// race 's queue-poller pause only partially fixed).
 	pauser func() bool
+
+	// depthGaugeAt time-gates the EmbedQueueDepth gauge update. CountPending is
+	// O(pending) and the drain loops passes back-to-back, so counting every pass
+	// is hot-loop waste; the gauge only needs second-resolution freshness.
+	// Touched only on the single drain goroutine, so it needs no lock.
+	depthGaugeAt time.Time
 
 	mu        sync.Mutex
 	startOnce sync.Once
@@ -280,8 +290,15 @@ func (w *Worker) drainPass(ctx context.Context) bool {
 		// pause when resync finishes.
 		return false
 	}
-	if depth, err := w.refs.CountPending(ctx); err == nil && w.metrics != nil && w.metrics.EmbedQueueDepth != nil {
-		w.metrics.EmbedQueueDepth.Set(float64(depth))
+	// Publish the queue-depth gauge at most once per second: the CountPending it
+	// needs is O(pending) and a greedy drain runs many passes per second.
+	if w.metrics != nil && w.metrics.EmbedQueueDepth != nil {
+		if now := time.Now(); now.Sub(w.depthGaugeAt) >= depthGaugeInterval {
+			w.depthGaugeAt = now
+			if depth, err := w.refs.CountPending(ctx); err == nil {
+				w.metrics.EmbedQueueDepth.Set(float64(depth))
+			}
+		}
 	}
 
 	limit := max(w.governor.Limit(), 1)
