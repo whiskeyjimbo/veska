@@ -429,7 +429,14 @@ func TestWorker_PerRowEmbedErrorKeepsSiblingsSucceeding(t *testing.T) {
 	}
 	vs := &fakeVectorStore{}
 
-	w := mustNewWorker(t, repo, emb, vs, embedder.WithInterval(5*time.Millisecond))
+	// High max-attempts so the errored row cannot exhaust its retry budget
+	// before this test cancels: the worker re-polls "bad" every 5ms, and with
+	// the default budget of 3 it could race to state='failed' in the window
+	// between "good" going ready and cancel() landing. This test asserts the
+	// retryable (pending) outcome; the exhaustion->failed path has its own test.
+	w := mustNewWorker(t, repo, emb, vs,
+		embedder.WithInterval(5*time.Millisecond),
+		embedder.WithMaxAttempts(1_000_000))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	w.Start(ctx)
