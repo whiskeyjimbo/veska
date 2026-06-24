@@ -34,3 +34,12 @@ const DegradedReasonIndexingInProgress = "indexing_in_progress"
 // momentarily stale. The accompanying WakeReconcilingRepos field lists the
 // affected repository IDs.
 const DegradedReasonWakeReconciling = "wake_reconciling"
+
+// DegradedReasonShallowClone is emitted on history-dependent read tools
+// (eng_get_hot_zone, eng_find_owner via git_blame, eng_get_context_pack) when
+// the repository is a shallow clone (URL-cloned with --depth=1). A shallow
+// clone has only one commit, so churn ranking, blame ownership, and per-file
+// history are computed over a truncated history and are not authoritative. The
+// caller should treat the history-derived fields as unreliable until the repo
+// is unshallowed (git fetch --unshallow).
+const DegradedReasonShallowClone = "shallow_clone_history_incomplete"

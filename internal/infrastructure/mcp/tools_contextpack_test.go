@@ -5,6 +5,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 func contextPackFixture(t *testing.T, opts ...contextpack.Option) *contextpack.Assembler {
@@ -106,6 +108,37 @@ func TestContextPack_SymbolMode(t *testing.T) {
 	}
 	if len(pack.RecentCommits) == 0 || len(pack.OpenFindings) != 1 || len(pack.Tasks) != 1 {
 		t.Fatalf("missing sections: %+v", pack)
+	}
+}
+
+// TestContextPack_ShallowCloneSurfacesDegradedReason verifies that on a depth=1
+// clone (where per-file history is truncated to one commit) the response carries
+// the shallow degraded reason.
+func TestContextPack_ShallowCloneSurfacesDegradedReason(t *testing.T) {
+	clone := makeShallowCloneRepo(t)
+	r := NewRegistry()
+	RegisterContextPackTool(r, contextPackFixture(t),
+		func(context.Context, string) (string, error) { return clone, nil }, nil)
+
+	raw, err := json.Marshal(map[string]any{"repo_id": "r", "branch": "main", "symbol": "Target"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent},
+		&Request{Method: "eng_get_context_pack", Params: raw})
+	if rpcErr != nil {
+		t.Fatalf("dispatch: %+v", rpcErr)
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("re-marshal: %v", err)
+	}
+	var resp contextPackResponse
+	if err := json.Unmarshal(b, &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !slices.Contains(resp.DegradedReasons, protocol.DegradedReasonShallowClone) {
+		t.Errorf("expected degraded_reasons to contain %q, got %v", protocol.DegradedReasonShallowClone, resp.DegradedReasons)
 	}
 }
 
