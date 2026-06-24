@@ -314,6 +314,17 @@ eval-recall:
 eval-usearch-ab:
 	USEARCH_AB_SCALE=$${USEARCH_AB_SCALE:-1} $(SQLITE_CGO_ENV) go test -tags "eval hnsw_native $(SQLITE_TAGS)" -run TestUsearchAB ./tools/loadtest/usearchab/ -v -count=1 -timeout 30m
 
+# eval-usearch-profile: calibrate the usearch build profiles (speed-vs-accuracy
+# lever). Sweeps build parallelism (serial / cores/2 / cores) x ef_construction
+# (64/96/128) on the REAL graph and reports per-cell BUILD time + autolink recall
+# vs the exact memvec oracle. Parallel cells run USEARCH_PROFILE_REPEATS times
+# (default 3) since parallel insertion is nondeterministic - the recall min/max
+# spread is the ship/no-ship signal, not the median. Point USEARCH_AB_DB at a
+# populated db (or it reads the live ~/.veska); USEARCH_AB_SCALE>1 grows the
+# corpus to the large-N regime. Output: /tmp/usearch-profile-sweep.md.
+eval-usearch-profile:
+	$(SQLITE_CGO_ENV) go test -tags "eval hnsw_native $(SQLITE_TAGS)" -run TestProfileSweep ./tools/loadtest/usearchab/ -v -count=1 -timeout 60m
+
 # eval-backend-matrix: memvec-vs-usearch metrics table across a slate of Go repos
 # of different sizes (for the manual). Indexes each repo into an isolated home
 # (usearch + model2vec) then compares both backends per repo: build time, query
