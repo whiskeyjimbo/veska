@@ -194,6 +194,37 @@ func TestStatusProvider_HealthyWhenNoPending(t *testing.T) {
 	}
 }
 
+// TestStatusProvider_MemoryPressureSurfaced pins that the memory_pressure field
+// reflects the injected predicate, and that it flags degraded (with the
+// 'memory_pressure' reason) only when it coincides with pending work - so the
+// otherwise-silent queue-lane deferral is visible in eng_get_status (solov2-b5aw).
+func TestStatusProvider_MemoryPressureSurfaced(t *testing.T) {
+	db := providersTestDB(t)
+	if _, err := db.Exec(`INSERT INTO schema_migrations (version) VALUES (1)`); err != nil {
+		t.Fatalf("seed migrations: %v", err)
+	}
+
+	// Under pressure but nothing pending: report the flag, but stay "ok".
+	sp := &statusProvider{db: db, pressure: func() bool { return true }}
+	m, err := sp.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if m["memory_pressure"] != true {
+		t.Errorf("memory_pressure = %v; want true", m["memory_pressure"])
+	}
+	if m["status"] != "ok" {
+		t.Errorf("status = %v; want ok (pressure but no backlog)", m["status"])
+	}
+
+	// nil predicate degrades to false.
+	sp2 := &statusProvider{db: db}
+	m2, _ := sp2.Status(context.Background())
+	if m2["memory_pressure"] != false {
+		t.Errorf("memory_pressure = %v; want false for nil predicate", m2["memory_pressure"])
+	}
+}
+
 // TestStatusProvider_OrphanPendingRefsNotCounted pins: a
 // pending ref whose node has been deleted (repo removal / re-promotion
 // churn left it dangling - node_embedding_refs has no FK to nodes) is NOT

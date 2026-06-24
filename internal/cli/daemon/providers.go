@@ -241,8 +241,9 @@ func lookupAppRecord(db *sql.DB) func(ctx context.Context, repoID string) (appli
 // when a cold scan is running without tailing the log. Nil-safe - a zero
 // scans field surfaces an empty list.
 type statusProvider struct {
-	db    *sql.DB
-	scans *application.ScanTracker
+	db       *sql.DB
+	scans    *application.ScanTracker
+	pressure func() bool // reports memory-pressure deferral of queue lanes; nil-safe
 }
 
 // Status reports liveness, schema version, and queue depth. Any query error is
@@ -314,6 +315,17 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 		rollup = "degraded"
 	}
 
+	// memory_pressure: the deferrable post-promotion lanes (auto_link/fts/
+	// revalidate) are throttled because free RAM is below the floor. Embedding
+	// is NOT throttled by this. Surfacing it explains a non-zero pending_fts that
+	// would otherwise look stuck (solov2-b5aw). When it coincides with pending
+	// work, flag the rollup so the cause is visible, not silent.
+	memPressure := sp.pressure != nil && sp.pressure()
+	if memPressure && (pendingFTS > 0 || pendingEmbeds > 0) {
+		reasons = append(reasons, "memory_pressure")
+		rollup = "degraded"
+	}
+
 	return map[string]any{
 		"status":           rollup,
 		"schema_version":   int(ver.Int64), // NULL -> 0
@@ -321,6 +333,7 @@ func (sp *statusProvider) Status(ctx context.Context) (map[string]any, error) {
 		"pending_embeds":   pendingEmbeds,
 		"pending_fts":      pendingFTS,
 		"scans_in_flight":  scansInFlight,
+		"memory_pressure":  memPressure,
 		"degraded_reasons": reasons,
 	}, nil
 }
