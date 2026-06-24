@@ -59,7 +59,7 @@ jobs:
           cp LICENSE THIRD_PARTY_NOTICES "dist/${name}/"
           tar -C dist -czf "dist/${name}.tar.gz" "${name}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: veska-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*.tar.gz
