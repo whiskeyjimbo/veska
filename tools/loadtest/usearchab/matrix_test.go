@@ -105,14 +105,24 @@ func TestBackendMatrix(t *testing.T) {
 	// Parallel build profiles are nondeterministic; each runs this many times and
 	// reports median/min/max. Serial profiles (default, accurate) run once.
 	repeats := envInt("USEARCH_MATRIX_REPEATS", 3)
+	// USEARCH_AB_ONLY="k8s,tidb" measures only buckets whose label or repo_id
+	// contains a listed token - lets you add one XXL datapoint without re-measuring
+	// the whole slate. Empty = all buckets.
+	only := parseCSVSet(os.Getenv("USEARCH_AB_ONLY"))
 
 	var rows []matrixRow
 	for k, nvs := range buckets {
+		if len(only) > 0 && !matchesAny(only, labels[k.repo], k.repo) {
+			continue
+		}
 		bs := time.Now()
 		row := measureBucket(t, ctx, k, nvs, labels, maxQueries, repeats, memvecMax > 0 && len(nvs) > memvecMax)
 		row.IndexSecs = times[k.repo]
 		rows = append(rows, row)
 		t.Logf("bucket %s (%d nodes) measured in %s", row.Repo, row.Nodes, time.Since(bs).Round(time.Second))
+	}
+	if len(rows) == 0 {
+		t.Skipf("no buckets matched USEARCH_AB_ONLY=%q", os.Getenv("USEARCH_AB_ONLY"))
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Nodes < rows[j].Nodes })
 
@@ -180,6 +190,19 @@ func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec
 		{vector.ProfileBalanced, true},
 		{vector.ProfileAccurate, false},
 	}
+	// USEARCH_PROFILES="default,balanced" limits the sweep - e.g. to skip the very
+	// slow accurate build on an XXL bucket. Empty = all four. default always runs:
+	// it supplies the profile-independent query/RAM figures.
+	if want := parseCSVSet(os.Getenv("USEARCH_PROFILES")); len(want) > 0 {
+		want[vector.ProfileDefault] = true
+		kept := profiles[:0:0]
+		for _, p := range profiles {
+			if want[p.name] {
+				kept = append(kept, p)
+			}
+		}
+		profiles = kept
+	}
 	for _, p := range profiles {
 		reps := 1
 		if p.parallel && repeats > 1 {
@@ -235,6 +258,27 @@ func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec
 		row.Profiles = append(row.Profiles, pm)
 	}
 	return row
+}
+
+// parseCSVSet splits a comma-separated env value into a trimmed lookup set.
+func parseCSVSet(s string) map[string]bool {
+	out := map[string]bool{}
+	for _, tok := range strings.Split(s, ",") {
+		if tok = strings.TrimSpace(tok); tok != "" {
+			out[tok] = true
+		}
+	}
+	return out
+}
+
+// matchesAny reports whether any token in set is a substring of label or repoID.
+func matchesAny(set map[string]bool, label, repoID string) bool {
+	for tok := range set {
+		if strings.Contains(label, tok) || strings.Contains(repoID, tok) {
+			return true
+		}
+	}
+	return false
 }
 
 // stats returns the median, min, and max of xs (median = upper-middle for even

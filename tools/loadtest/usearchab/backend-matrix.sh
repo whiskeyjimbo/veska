@@ -35,9 +35,7 @@ REPOS=(
   "L   consul  hashicorp/consul"
   "L2  vault   hashicorp/vault"
   "XL  tidb    pingcap/tidb"
-  # Heavy XXL repo - uncomment to extend the curve further. Clones GBs and takes
-  # tens of minutes to index; set the sampling knobs below when you do.
-  # "XXL k8s     kubernetes/kubernetes"
+  "XXL k8s     kubernetes/kubernetes"
 )
 
 # For big repos: USEARCH_AB_MAX_QUERIES samples the per-node autolink sweep
@@ -177,9 +175,16 @@ note "index times: $itimes"
 # large buckets keep a real recall number - the whole point of including tidb.
 # REPEATS averages the nondeterministic parallel profiles.
 note "running TestBackendMatrix ..."
+# MEMVEC_MAX_NODES skips the in-RAM exact index above this size (usearch-only row,
+# recall n/a) - k8s-scale graphs won't fit alongside the box's other tenants.
+# USEARCH_AB_ONLY / USEARCH_PROFILES pass through so you can add one XXL datapoint
+# cheaply (e.g. ONLY=k8s PROFILES=default to skip re-measuring the slate and the
+# very slow accurate build).
 USEARCH_AB_DB="$DB" USEARCH_AB_LABELS="$labels" USEARCH_AB_INDEX_TIMES="$itimes" \
   USEARCH_AB_MAX_QUERIES="${USEARCH_AB_MAX_QUERIES:-2000}" \
+  USEARCH_AB_MEMVEC_MAX_NODES="${USEARCH_AB_MEMVEC_MAX_NODES:-150000}" \
   USEARCH_MATRIX_REPEATS="${USEARCH_MATRIX_REPEATS:-3}" \
+  USEARCH_AB_ONLY="${USEARCH_AB_ONLY:-}" USEARCH_PROFILES="${USEARCH_PROFILES:-}" \
   CGO_ENABLED=1 go -C "$REPO_SRC" test -tags "eval hnsw_native sqlite_fts5" \
   -run TestBackendMatrix ./tools/loadtest/usearchab/ -v -count=1 -timeout 90m
 
