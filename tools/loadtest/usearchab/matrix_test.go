@@ -23,6 +23,7 @@ package usearchab
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"runtime"
 	"sort"
@@ -67,18 +68,25 @@ func TestBackendMatrix(t *testing.T) {
 	}
 
 	// Reuse TestUsearchAB's loader (copy db, decode persisted vectors per bucket).
-	buckets, names := loadBucketsForMatrix(t, ctx, srcDB)
+	buckets := loadBucketsForMatrix(t, ctx, srcDB)
 	if len(buckets) == 0 {
 		t.Skip("no ready embeddings in db")
 	}
 
 	// Repo-id -> short label / tier, optional, via USEARCH_AB_LABELS="repoid=S:go-git,repoid2=L:consul".
 	labels := parseLabels(os.Getenv("USEARCH_AB_LABELS"))
-
 	times := parseIntMap(os.Getenv("USEARCH_AB_INDEX_TIMES"))
+	// USEARCH_AB_MAX_QUERIES caps the per-node autolink sweep to a random sample
+	// (build/RAM still use the full index) so O(n^2) memvec stays tractable on big
+	// repos; 0 = every node. USEARCH_AB_MEMVEC_MAX_NODES skips the memvec build for
+	// buckets above it (usearch-only row, recall n/a) when an in-RAM exact index is
+	// impractical; 0 = always build memvec.
+	maxQueries := envInt("USEARCH_AB_MAX_QUERIES", 0)
+	memvecMax := envInt("USEARCH_AB_MEMVEC_MAX_NODES", 0)
+
 	var rows []matrixRow
 	for k, nvs := range buckets {
-		row := measureBucket(t, ctx, k, nvs, names, labels)
+		row := measureBucket(t, ctx, k, nvs, labels, maxQueries, memvecMax > 0 && len(nvs) > memvecMax)
 		row.IndexSecs = times[k.repo]
 		rows = append(rows, row)
 	}
@@ -93,28 +101,27 @@ func TestBackendMatrix(t *testing.T) {
 	t.Logf("matrix written to %s", out)
 }
 
-// measureBucket builds memvec then usearch in isolation for one bucket, timing
-// the build, measuring memory, and computing autolink recall (memvec = oracle).
-func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec, names map[string]string, labels map[string]string) matrixRow {
+// measureBucket builds memvec and/or usearch in isolation for one bucket and
+// measures build time, memory, autolink recall (memvec = oracle), and per-query
+// latency. Both stores are always built from the FULL vector set; recall and
+// latency are measured over a query SAMPLE (queryNodes) so the O(n^2) autolink
+// sweep stays tractable on large repos. When memvecSkip is set (bucket too big
+// for an in-RAM exact index) memvec is skipped entirely - a usearch-only row,
+// recall reported as n/a.
+func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec, labels map[string]string, maxQueries int, memvecSkip bool) matrixRow {
 	batch := make([]domain.EmbeddingRow, len(nvs))
 	for i, nv := range nvs {
 		batch[i] = domain.EmbeddingRow{NodeID: nv.nodeID, ContentHash: nv.hash, ModelID: nv.modelID, Vector: nv.vec}
 	}
+	queryNodes := sampleNodes(nvs, maxQueries)
 
-	// --- memvec: Go-heap, measured exactly via HeapAlloc ---
-	mem, err := vector.NewVectorStorage(vector.BackendMemory, t.TempDir())
-	if err != nil {
-		t.Fatalf("new memvec: %v", err)
+	label := labels[k.repo]
+	if label == "" {
+		label = shortRepo(k.repo)
 	}
-	heap0 := heapAllocBytes()
-	memStart := time.Now()
-	if err := mem.UpsertEmbeddings(ctx, k.repo, k.branch, batch); err != nil {
-		t.Fatalf("memvec upsert: %v", err)
-	}
-	memBuild := time.Since(memStart)
-	memMiB := mibSince(heap0, heapAllocBytes())
+	row := matrixRow{Repo: label, Branch: k.branch, Nodes: len(nvs), Recall: -1} // -1 = n/a
 
-	// --- usearch: C-side, measured via VmRSS delta after a GC settles Go heap ---
+	// --- usearch (always): C-side, reports its own footprint via MemoryUsage ---
 	use, err := vector.NewVectorStorage(vector.BackendUsearch, t.TempDir())
 	if err != nil {
 		t.Fatalf("new usearch: %v", err)
@@ -123,41 +130,59 @@ func measureBucket(t *testing.T, ctx context.Context, k bucketKey, nvs []nodeVec
 	if err := use.UpsertEmbeddings(ctx, k.repo, k.branch, batch); err != nil {
 		t.Fatalf("usearch upsert: %v", err)
 	}
-	useBuild := time.Since(useStart)
-	// usearch's index is C-side (cgo) - HeapAlloc and process RSS can't isolate it
-	// (glibc retains freed C memory across buckets). usearch reports its own
-	// footprint (float32 vectors + HNSW graph), which is the honest number.
-	useMiB := 0.0
+	row.UseBuildMs = msOf(time.Since(useStart))
 	if mu, ok := use.(interface{ MemoryUsage() (uint64, error) }); ok {
 		if b, err := mu.MemoryUsage(); err == nil {
-			useMiB = float64(b) / (1024 * 1024)
+			row.UseMiB = float64(b) / (1024 * 1024)
 		}
 	}
+	useEdges, _, useLat := candidates(ctx, t, use, k, queryNodes)
+	row.UseP50ms, row.UseP95ms = pct(useLat, 50), pct(useLat, 95)
 
-	memEdges, _, memLat := candidates(ctx, t, mem, k, nvs)
-	useEdges, _, useLat := candidates(ctx, t, use, k, nvs)
-	_, _, shared := diff(memEdges, useEdges)
-	recall := 1.0
-	if len(memEdges) > 0 {
-		recall = float64(shared) / float64(len(memEdges))
+	// --- memvec (unless skipped): Go-heap, measured exactly via HeapAlloc ---
+	if !memvecSkip {
+		mem, err := vector.NewVectorStorage(vector.BackendMemory, t.TempDir())
+		if err != nil {
+			t.Fatalf("new memvec: %v", err)
+		}
+		heap0 := heapAllocBytes()
+		memStart := time.Now()
+		if err := mem.UpsertEmbeddings(ctx, k.repo, k.branch, batch); err != nil {
+			t.Fatalf("memvec upsert: %v", err)
+		}
+		row.MemBuildMs = msOf(time.Since(memStart))
+		row.MemMiB = mibSince(heap0, heapAllocBytes())
+
+		memEdges, _, memLat := candidates(ctx, t, mem, k, queryNodes)
+		row.MemP50ms, row.MemP95ms = pct(memLat, 50), pct(memLat, 95)
+		_, _, shared := diff(memEdges, useEdges)
+		row.AutolinkEdg = len(memEdges)
+		if len(memEdges) > 0 {
+			row.Recall = float64(shared) / float64(len(memEdges))
+		} else {
+			row.Recall = 1
+		}
 	}
 
 	if d, ok := use.(interface{ Destroy() }); ok {
 		d.Destroy()
 	}
+	return row
+}
 
-	label := labels[k.repo]
-	if label == "" {
-		label = shortRepo(k.repo)
+// sampleNodes returns up to max nodes (seeded random subset) for the query set;
+// max <= 0 or a bucket already under the cap returns the whole set.
+func sampleNodes(nvs []nodeVec, max int) []nodeVec {
+	if max <= 0 || len(nvs) <= max {
+		return nvs
 	}
-	return matrixRow{
-		Repo: label, Branch: k.branch, Nodes: len(nvs),
-		MemBuildMs: msOf(memBuild), UseBuildMs: msOf(useBuild),
-		MemP50ms: pct(memLat, 50), MemP95ms: pct(memLat, 95),
-		UseP50ms: pct(useLat, 50), UseP95ms: pct(useLat, 95),
-		Recall: recall, MemMiB: memMiB, UseMiB: useMiB,
-		AutolinkEdg: len(memEdges),
+	r := rand.New(rand.NewSource(0x5A11D5))
+	idx := r.Perm(len(nvs))[:max]
+	out := make([]nodeVec, max)
+	for i, j := range idx {
+		out[i] = nvs[j]
 	}
+	return out
 }
 
 func renderMatrix(rows []matrixRow) string {
@@ -174,11 +199,21 @@ func renderMatrix(rows []matrixRow) string {
 		if r.IndexSecs > 0 {
 			idx = fmt.Sprintf("%ds", r.IndexSecs)
 		}
-		b.WriteString(fmt.Sprintf("| %s | %d | %s | %s | %s | %.2fms | %.2fms | %.2fms | %.2fms | %.4f | %.0f MiB | %.0f MiB |\n",
+		// Recall < 0 means memvec was skipped (bucket too big for an in-RAM exact
+		// index): a usearch-only row, memvec columns blanked.
+		memBuild := dur(r.MemBuildMs)
+		memP50 := fmt.Sprintf("%.2fms", r.MemP50ms)
+		memP95 := fmt.Sprintf("%.2fms", r.MemP95ms)
+		memRAM := fmt.Sprintf("%.0f MiB", r.MemMiB)
+		recall := fmt.Sprintf("%.4f", r.Recall)
+		if r.Recall < 0 {
+			memBuild, memP50, memP95, memRAM, recall = "—", "—", "—", "—", "n/a"
+		}
+		b.WriteString(fmt.Sprintf("| %s | %d | %s | %s | %s | %s | %.2fms | %s | %.2fms | %s | %s | %.0f MiB |\n",
 			r.Repo, r.Nodes, idx,
-			dur(r.MemBuildMs), dur(r.UseBuildMs),
-			r.MemP50ms, r.UseP50ms, r.MemP95ms, r.UseP95ms,
-			r.Recall, r.MemMiB, r.UseMiB))
+			memBuild, dur(r.UseBuildMs),
+			memP50, r.UseP50ms, memP95, r.UseP95ms,
+			recall, memRAM, r.UseMiB))
 	}
 	b.WriteString(matrixGlossary)
 	return b.String()
@@ -256,8 +291,8 @@ func parseIntMap(s string) map[string]int {
 }
 
 // loadBucketsForMatrix mirrors TestUsearchAB's db-load: copy the db, decode the
-// persisted float32 vectors, bucket per (repo, branch), plus the symbol names.
-func loadBucketsForMatrix(t *testing.T, ctx context.Context, srcDB string) (map[bucketKey][]nodeVec, map[string]string) {
+// persisted float32 vectors, bucket per (repo, branch).
+func loadBucketsForMatrix(t *testing.T, ctx context.Context, srcDB string) map[bucketKey][]nodeVec {
 	dbPath := t.TempDir() + "/veska.db"
 	copyDBFiles(t, srcDB, dbPath)
 	pools, err := sqlite.OpenPools(dbPath)
@@ -280,5 +315,5 @@ func loadBucketsForMatrix(t *testing.T, ctx context.Context, srcDB string) (map[
 		k := bucketKey{repo: r.RepoID, branch: r.Branch}
 		buckets[k] = append(buckets[k], nodeVec{nodeID: r.NodeID, hash: r.ContentHash, modelID: r.ModelID, vec: vec})
 	}
-	return buckets, loadSymbolNames(t, pools.ReadDB)
+	return buckets
 }
