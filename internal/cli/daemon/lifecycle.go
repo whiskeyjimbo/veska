@@ -118,6 +118,14 @@ func (d *Daemon) awaitListenerSockets() {
 // consistent store; without it a restart leaves search returning ≤ 0 hits until
 // a content change forces re-embedding.
 func (d *Daemon) rehydrateVectors() {
+	// A backend that loaded a clean-shutdown snapshot already matches
+	// node_embeddings, so the costly SQL rebuild (single-threaded HNSW Add, tens
+	// of seconds at scale) is redundant - skip it. memvec and any crash/first
+	// boot fall through to the rebuild.
+	if h, ok := d.vectors.(interface{ HydratedFromDisk() bool }); ok && h.HydratedFromDisk() {
+		slog.Info("daemon: reused persisted vector index (clean shutdown); skipped rehydrate")
+		return
+	}
 	archive := sqlite.NewEmbeddingArchive(d.pools.ReadDB, d.pools.Write)
 	if counts, err := embedder.RehydrateVectors(d.ctx, archive, d.vectors); err != nil {
 		slog.Error("daemon: rehydrate vector store", "err", err)
@@ -310,6 +318,10 @@ func (d *Daemon) Stop() error {
 
 		d.awaitBackgroundGoroutines(timeout.C)
 		d.drainScans(timeout.C)
+		// Persist the vector index now the workers are drained and it is
+		// quiescent, so the next clean boot reloads it instead of rebuilding
+		// from SQL. Best-effort: a failure just means the next boot rehydrates.
+		d.persistVectors()
 		stopErr = d.closeResources()
 
 		// Best-effort socket cleanup (MCP server already removes them, but
@@ -318,6 +330,20 @@ func (d *Daemon) Stop() error {
 		_ = os.Remove(d.cfg.MCPSockPath)
 	})
 	return stopErr
+}
+
+// persistVectors writes the vector index to its on-disk snapshot on shutdown so
+// the next boot can reload it instead of rebuilding from node_embeddings. Only
+// backends that persist (usearch) implement Save; memvec is skipped. The write
+// also drops the clean-shutdown marker that authorizes the fast reload.
+func (d *Daemon) persistVectors() {
+	p, ok := d.vectors.(interface{ Save(string) error })
+	if !ok {
+		return // memvec: nothing to persist
+	}
+	if err := p.Save(d.cfg.VeskaHome); err != nil {
+		slog.Warn("daemon: persist vector index failed; next boot will rebuild from node_embeddings", "err", err)
+	}
 }
 
 // awaitBackgroundGoroutines waits for the MCP server, watch loop, and startup

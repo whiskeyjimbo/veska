@@ -27,6 +27,14 @@ type sidecar struct {
 	NextID   uint64             `json:"nextID"`
 }
 
+// cleanShutdownMarker is written by Save after all sidecars are flushed and is
+// consumed (deleted) by Open. Its presence at Open time is the signal that the
+// on-disk sidecars are a complete, current snapshot of the durable
+// node_embeddings table - i.e. the process last exited cleanly. A crash leaves
+// no marker, so the next boot ignores the (possibly stale) sidecars and rebuilds
+// from SQL instead, keeping the index free of vectors for since-deleted nodes.
+const cleanShutdownMarker = "vec-clean-shutdown"
+
 // sep is the field separator used in index filenames. Because url.QueryEscape encodes
 // "|" as "%7C", using a literal "|" in a filename stem guarantees that it is parsed uniquely
 // as a separator, ensuring field values containing "|" are safely round-tripped.
@@ -104,6 +112,12 @@ func (s *UsearchStore) Save(dir string) error {
 		if err := os.WriteFile(base+".json", data, 0o644); err != nil {
 			return fmt.Errorf("persist: write sidecar for %+v: %w", key, err)
 		}
+	}
+
+	// Marker last: it must only exist once every sidecar above is durable, since
+	// its presence is what tells the next boot the snapshot is complete.
+	if err := os.WriteFile(filepath.Join(dir, cleanShutdownMarker), nil, 0o644); err != nil {
+		return fmt.Errorf("persist: write clean-shutdown marker: %w", err)
 	}
 	return nil
 }
