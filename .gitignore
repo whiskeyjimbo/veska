@@ -40,3 +40,6 @@ docs/research/cmd_code_review.md
 
 # MkDocs build output (manual)
 site/
+
+# Local research / competitive-analysis notes (not for the repo)
+research/
