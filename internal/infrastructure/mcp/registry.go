@@ -16,7 +16,7 @@ import (
 )
 
 // toolNamePattern enforces the tool naming convention where names must start with 'eng_', followed by an approved verb, and an object segment.
-var toolNamePattern = regexp.MustCompile(`^eng_(find|get|list|search|set|close|reopen|suppress|add|remove|promote|reindex)_[a-z][a-z0-9_]*$`)
+var toolNamePattern = regexp.MustCompile(`^eng_(find|get|list|search|set|close|reopen|suppress|add|remove|promote|reindex|trace)_[a-z][a-z0-9_]*$`)
 
 const minDescriptionLen = 10
 
@@ -95,7 +95,7 @@ func (r *Registry) tracerProvider() observability.TracerProvider {
 // Register adds a new tool to the registry and performs validation of the spec names, schemas, and exemptions.
 func (r *Registry) Register(spec ToolSpec) error {
 	if !toolNamePattern.MatchString(spec.Name) {
-		return fmt.Errorf("mcp: tool name %q does not match eng_<verb>_<object> pattern (allowed verbs: find,get,list,search,set,close,reopen,suppress,add,remove,promote,reindex; object must start with [a-z])", spec.Name)
+		return fmt.Errorf("mcp: tool name %q does not match eng_<verb>_<object> pattern (allowed verbs: find,get,list,search,set,close,reopen,suppress,add,remove,promote,reindex,trace; object must start with [a-z])", spec.Name)
 	}
 	if len(spec.Description) < minDescriptionLen {
 		return fmt.Errorf("mcp: tool %q description is %d chars, minimum is %d", spec.Name, len(spec.Description), minDescriptionLen)

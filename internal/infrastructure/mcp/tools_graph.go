@@ -185,6 +185,13 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		Handler:         makeGetTypeHierarchyHandler(graph, cfg.repos, cfg.scans, cfg.reconcile),
 	})
 	r.MustRegister(ToolSpec{
+		Name:            "eng_trace_path",
+		Description:     "Trace how one symbol reaches another: returns the shortest path(s) from a source to a target over the chosen edge kinds (CALLS by default). Answers \"does this handler ever reach that DB write\" - the directed point-to-point question eng_get_call_chain (flood) and eng_get_blast_radius (closure) cannot. Pass from_node_id/from_symbol and to_node_id/to_symbol; include IMPLEMENTS in edge_kinds to hop interface to implementer. Empty paths with a reason means no route within the depth bound (not an error).",
+		IncludesStaging: false,
+		InputSchema:     tracePathInputSchema,
+		Handler:         makeTracePathHandler(graph, cfg.repos, cfg.scans, cfg.reconcile),
+	})
+	r.MustRegister(ToolSpec{
 		Name:            "eng_get_file_nodes",
 		Description:     "Return all nodes for a file path (absolute, or repo-relative when repo_id is given); staged nodes take precedence when available.",
 		IncludesStaging: true,

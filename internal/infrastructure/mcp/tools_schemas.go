@@ -204,6 +204,25 @@ var getTypeHierarchyInputSchema = json.RawMessage(`{
   }
 }`)
 
+var tracePathInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Returns the shortest path(s) by which a source symbol reaches a target symbol over the chosen edge kinds (CALLS by default). For each endpoint pass one of *_node_id or *_symbol; an ambiguous symbol is rejected (pass node_id). An empty paths list with a reason means no route within the depth bound (not an error).",
+  "properties": {
+    "from_node_id": {"type": "string", "description": "Source resolved directly by node_id."},
+    "from_symbol":  {"type": "string", "description": "Source symbol name; resolved against repo_id+branch (ambiguity rejected)."},
+    "to_node_id":   {"type": "string", "description": "Target resolved directly by node_id."},
+    "to_symbol":    {"type": "string", "description": "Target symbol name; resolved against repo_id+branch (ambiguity rejected)."},
+    "edge_kinds":   {"type": "array", "items": {"type": "string"}, "description": "Edge kinds to traverse (default [\"CALLS\"]). Include IMPLEMENTS to hop interface->implementer, IMPORTS for package reachability."},
+    "max_depth":    {"type": "integer", "minimum": 1, "maximum": 25, "description": "Max path length in edges (default 12, max 25)."},
+    "max_paths":    {"type": "integer", "minimum": 1, "maximum": 25, "description": "Max distinct shortest paths to return (default 1)."},
+    "repo_id":      {"type": "string"},
+    "branch":       {"type": "string"},
+    "cwd":          {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
+  }
+}`)
+
 var blastRadiusInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
