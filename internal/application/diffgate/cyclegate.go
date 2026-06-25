@@ -2,7 +2,11 @@
 
 package diffgate
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/whiskeyjimbo/veska/internal/application/cycles"
+)
 
 // DependencyKinds are the edge kinds whose cycles this gate detects. Today only
 // CALLS edges are emitted (by the Go parser); IMPORTS is included so that when a
@@ -177,89 +181,9 @@ func firstID(g CycleGroup) string {
 // node its own size-1 SCC, which callers discard anyway. Iteration is sorted
 // (nodes and each adjacency list) for deterministic component output.
 func stronglyConnected(edges []DirectedEdge) [][]string {
-	adj := make(map[string][]string)
-	nodeset := make(map[string]struct{})
-	for _, e := range edges {
-		nodeset[e.Src] = struct{}{}
-		nodeset[e.Dst] = struct{}{}
-		if e.Src == e.Dst {
-			continue // self-loop: not a >=2 cycle
-		}
-		adj[e.Src] = append(adj[e.Src], e.Dst)
+	conv := make([]cycles.Edge, len(edges))
+	for i, e := range edges {
+		conv[i] = cycles.Edge{Src: e.Src, Dst: e.Dst}
 	}
-	nodes := make([]string, 0, len(nodeset))
-	for n := range nodeset {
-		nodes = append(nodes, n)
-	}
-	sort.Strings(nodes)
-	for n := range adj {
-		sort.Strings(adj[n])
-	}
-
-	index := make(map[string]int)
-	lowlink := make(map[string]int)
-	onStack := make(map[string]bool)
-	var stack []string
-	next := 0
-	var sccs [][]string
-
-	type frame struct {
-		node string
-		ei   int // next adjacency index to process
-	}
-
-	push := func(v string) {
-		index[v] = next
-		lowlink[v] = next
-		next++
-		stack = append(stack, v)
-		onStack[v] = true
-	}
-
-	for _, root := range nodes {
-		if _, seen := index[root]; seen {
-			continue
-		}
-		push(root)
-		call := []frame{{node: root}}
-
-		for len(call) > 0 {
-			f := &call[len(call)-1]
-			v := f.node
-			if f.ei < len(adj[v]) {
-				w := adj[v][f.ei]
-				f.ei++
-				if _, seen := index[w]; !seen {
-					push(w)
-					call = append(call, frame{node: w})
-				} else if onStack[w] && index[w] < lowlink[v] {
-					lowlink[v] = index[w]
-				}
-				continue
-			}
-			// v fully explored: if it roots an SCC, pop the component.
-			if lowlink[v] == index[v] {
-				var comp []string
-				for {
-					w := stack[len(stack)-1]
-					stack = stack[:len(stack)-1]
-					onStack[w] = false
-					comp = append(comp, w)
-					if w == v {
-						break
-					}
-				}
-				sort.Strings(comp)
-				sccs = append(sccs, comp)
-			}
-			call = call[:len(call)-1]
-			if len(call) > 0 { // propagate lowlink to parent (post-"recursion")
-				p := call[len(call)-1].node
-				if lowlink[v] < lowlink[p] {
-					lowlink[p] = lowlink[v]
-				}
-			}
-		}
-	}
-	return sccs
+	return cycles.StronglyConnected(conv)
 }

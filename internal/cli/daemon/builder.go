@@ -323,6 +323,11 @@ func (b *daemonBuilder) buildCheckPipeline() error {
 		checks.WithUntestedRepoKindLookup(deadcodeRepoKind),
 		checks.WithUntestedInterfaceMethods(deadcodeRepo),
 	))
+	// import-cycle is zero-config and repo-wide; it reuses the ephemeral-repo
+	// skip so cycles in cache-tier clones aren't reported.
+	checkReg.Register(checks.NewImportCycleCheck(sqlite.NewPackageDepsRepo(b.pools.ReadDB),
+		checks.WithImportCycleRepoKindLookup(deadcodeRepoKind),
+	))
 
 	// Secrets-scan (on unless disabled) + vuln-scan (only when provider="osv")
 	// share their enablement policy with the cold-scan CLI path via
