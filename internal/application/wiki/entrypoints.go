@@ -43,6 +43,13 @@ type EntryPoint struct {
 	InboundCount    int    `json:"inbound_count"`
 	Exported        bool   `json:"exported"`
 	HasAdjacentTest bool   `json:"has_adjacent_test"`
+	// LineStart/LineEnd and Summary describe where to start reading and what
+	// the symbol does. Populated from the backing node so the onboarding page
+	// can render a file:line link with a one-line description; the
+	// entry_points.md table and MCP tool ignore them.
+	LineStart int    `json:"line_start,omitempty"`
+	LineEnd   int    `json:"line_end,omitempty"`
+	Summary   string `json:"summary,omitempty"`
 }
 
 // EntryPointsReport is the selected entry_points surface. It is the
@@ -194,7 +201,7 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 	entries := make([]EntryPoint, 0, len(candidates))
 	for _, n := range candidates {
 		srcIDs := inbound[string(n.ID)]
-		entries = append(entries, EntryPoint{
+		ep := EntryPoint{
 			Name:            n.Name,
 			SymbolName:      n.Name,
 			FilePath:        n.Path,
@@ -202,7 +209,13 @@ func (s *EntryPointsService) SelectWith(ctx context.Context, repoID, branch stri
 			InboundCount:    len(srcIDs),
 			Exported:        isExported(n.Name),
 			HasAdjacentTest: hasAdjacentTest(graph, srcIDs),
-		})
+			Summary:         nodeSummary(n),
+		}
+		if n.Lines != nil {
+			ep.LineStart = n.Lines.Start
+			ep.LineEnd = n.Lines.End
+		}
+		entries = append(entries, ep)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -298,4 +311,14 @@ func hasAdjacentTest(graph *domain.Graph, srcIDs []string) bool {
 		}
 	}
 	return false
+}
+
+// nodeSummary returns the node's stored ShortSummary, falling back to the
+// deterministic HeuristicSummary. Mirrors the snapshot/MCP projection rule so
+// the onboarding page describes a symbol the same way the rest of veska does.
+func nodeSummary(n *domain.Node) string {
+	if n.ShortSummary != nil {
+		return *n.ShortSummary
+	}
+	return n.HeuristicSummary()
 }

@@ -13,10 +13,10 @@ import (
 // flags/positionals (the positional/--repo merge and the --all mutual-exclusion
 // rule) and delegates.
 
-// wikiCmd returns the "wiki" Cobra command. It regenerates both wiki pages
-// (hot_zones + entry_points) on demand by reusing the WorkKindWiki render
-// orchestration (wiki.Handler.Handle) - the same code path the post-promotion
-// queue lane runs, so the output is byte-identical.
+// wikiCmd returns the "wiki" Cobra command. It regenerates the wiki pages
+// (hot_zones + entry_points + onboarding) on demand by reusing the
+// WorkKindWiki render orchestration (wiki.Handler.Handle) - the same code path
+// the post-promotion queue lane runs, so the output is byte-identical.
 func wikiCmd() *cobra.Command {
 	var (
 		repoID  string
@@ -26,7 +26,7 @@ func wikiCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:          "wiki [path|repo-id]",
-		Short:        "Regenerate the veska wiki pages (hot_zones + entry_points)",
+		Short:        "Regenerate the veska wiki pages (hot_zones + entry_points + onboarding)",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

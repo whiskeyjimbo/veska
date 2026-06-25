@@ -94,3 +94,105 @@ func RenderEntryPoints(r EntryPointsReport) string {
 	}
 	return b.String()
 }
+
+// OnboardingPagePath is the repoRoot-relative path the onboarding tour page is
+// written to. Like the sibling pages it is a full-overwrite, veska-owned
+// generated file (no hand-edit preservation).
+const OnboardingPagePath = "docs/veska/onboarding.md"
+
+// DependencyRef is the onboarding projection of one external dependency: the
+// minimum the reading path needs. The wiki Handler maps the dependencies
+// service Result into this so the render stays decoupled from that DTO.
+type DependencyRef struct {
+	Module     string
+	Version    string
+	Language   string
+	UsageCount int
+	// TopSymbol is one representative call-target symbol_path, for color. May
+	// be empty.
+	TopSymbol string
+}
+
+// RenderOnboarding renders the dependency-ordered onboarding tour: entry
+// points first (the vocabulary everything else calls), then hot zones (what
+// changes most), then dependencies (the external ground the repo stands on).
+// The output is a pure function of the three already-sorted inputs (plus the
+// GeneratedAt stamp), so rendering the same promoted state twice with the same
+// clock yields byte-identical output - no map-order leakage.
+func RenderOnboarding(ep EntryPointsReport, hot Report, deps []DependencyRef) string {
+	var b strings.Builder
+	b.WriteString("# Onboarding\n\n")
+	renderGeneratedHeader(&b, ep.GeneratedAt)
+	b.WriteString("A reading path through this repo, ordered the way a new contributor ")
+	b.WriteString("or agent should explore it: the symbols everything else calls, then ")
+	b.WriteString("the files most likely to change, then the external code it leans on.\n\n")
+	renderOnboardingEntryPoints(&b, ep.EntryPoints)
+	renderOnboardingHotZones(&b, hot.Zones)
+	renderOnboardingDependencies(&b, deps)
+	return b.String()
+}
+
+func renderOnboardingEntryPoints(b *strings.Builder, eps []EntryPoint) {
+	b.WriteString("## 1. Entry points - start here\n\n")
+	b.WriteString("Highest-fan-in symbols. Read these first to learn the vocabulary the ")
+	b.WriteString("rest of the code speaks.\n\n")
+	if len(eps) == 0 {
+		b.WriteString("_No entry points yet - symbols appear here once the auto-link pipeline has built inbound CALLS edges._\n\n")
+		return
+	}
+	for _, e := range eps {
+		fmt.Fprintf(b, "- `%s` - %s", e.SymbolName, locRef(e.FilePath, e.LineStart))
+		if e.Summary != "" {
+			fmt.Fprintf(b, " - %s", e.Summary)
+		}
+		fmt.Fprintf(b, " _(%d callers)_\n", e.InboundCount)
+	}
+	b.WriteString("\n")
+}
+
+func renderOnboardingHotZones(b *strings.Builder, zones []HotZone) {
+	b.WriteString("## 2. Hot zones - read next\n\n")
+	b.WriteString("Files ranked by change risk (recent change frequency multiplied by ")
+	b.WriteString("blast radius). These move the most, so understanding them pays off.\n\n")
+	if len(zones) == 0 {
+		b.WriteString("_No hot zones yet - commit some changes and re-run `veska wiki`._\n\n")
+		return
+	}
+	for _, z := range zones {
+		fmt.Fprintf(b, "- `%s` - changed %d time(s), blast radius %d\n",
+			z.FilePath, z.RecentChangeFrequency, z.BlastRadius)
+	}
+	b.WriteString("\n")
+}
+
+func renderOnboardingDependencies(b *strings.Builder, deps []DependencyRef) {
+	b.WriteString("## 3. Dependencies - the ground you stand on\n\n")
+	b.WriteString("External modules this repo calls into, ranked by usage.\n\n")
+	if len(deps) == 0 {
+		b.WriteString("_No external dependencies recorded yet._\n")
+		return
+	}
+	for _, d := range deps {
+		fmt.Fprintf(b, "- `%s`", d.Module)
+		if d.Version != "" {
+			fmt.Fprintf(b, " %s", d.Version)
+		}
+		if d.Language != "" {
+			fmt.Fprintf(b, " (%s)", d.Language)
+		}
+		fmt.Fprintf(b, " - %d call site(s)", d.UsageCount)
+		if d.TopSymbol != "" {
+			fmt.Fprintf(b, ", e.g. `%s`", d.TopSymbol)
+		}
+		b.WriteString("\n")
+	}
+}
+
+// locRef renders a file_path:line reference, dropping the line suffix when the
+// line is unknown (0) so the link stays clean.
+func locRef(filePath string, line int) string {
+	if line > 0 {
+		return fmt.Sprintf("`%s:%d`", filePath, line)
+	}
+	return fmt.Sprintf("`%s`", filePath)
+}

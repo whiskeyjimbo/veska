@@ -1114,6 +1114,42 @@ veska findings suppressions show <suppression_id> [flags]
 ```
 
 
+### `veska graph`
+
+Export and explore the code graph as a shareable snapshot
+
+
+#### `veska graph export`
+
+Write a deterministic JSON snapshot of the repo's code graph
+
+Serialize the repo's code graph - nodes, edges, hot zones, entry points,
+and dependencies, each node carrying its summary and source - to a single
+JSON file. The snapshot is deterministic (re-exporting an unchanged repo
+yields byte-identical output) and safe to commit so teammates skip indexing.
+
+It opens the local graph DB directly; no running daemon is required. The
+file is the shareable contract consumed by `veska graph serve`.
+
+```
+veska graph export <out.json> [flags]
+```
+
+**Example:**
+
+```sh
+veska graph export graph-snapshot.json
+  veska graph export --repo myproj /tmp/snap.json
+```
+
+**Flags:**
+
+```
+      --branch string   branch to export (default: the repo's active branch)
+      --repo string     repo id, short_id, or alias (default: cwd repo, or the sole registered repo)
+```
+
+
 ### `veska help`
 
 Help about any command
@@ -1692,7 +1728,7 @@ veska version
 
 ### `veska wiki`
 
-Regenerate the veska wiki pages (hot_zones + entry_points)
+Regenerate the veska wiki pages (hot_zones + entry_points + onboarding)
 
 ```
 veska wiki [path|repo-id] [flags]
