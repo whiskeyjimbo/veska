@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,8 +87,10 @@ func reportDaemonAdd(ctx context.Context, w io.Writer, res daemonAddResult, wait
 }
 
 // directAdd inserts the repo row + installs hooks without the daemon. The next
-// daemon start cold-scans it via StartupResync. Surfaces the dial error so the
-// user can tell 'daemon down' from 'daemon up but unreachable'.
+// daemon start cold-scans it via StartupResync. The dial error is logged at
+// debug rather than printed: a not-running daemon is the normal case (first
+// run, CI), so a successful add should read as success, not an alarm. The error
+// stays available at debug level for the rarer 'daemon up but unreachable' case.
 func directAdd(ctx context.Context, w io.Writer, root string, dialErr error) error {
 	db, closeFn, err := OpenLocalDB()
 	if err != nil {
@@ -103,7 +106,8 @@ func directAdd(ctx context.Context, w io.Writer, root string, dialErr error) err
 	if existedLocal {
 		verb = "already registered"
 	}
-	fmt.Fprintf(w, "%s repo %s (direct write; daemon dial failed: %v - restart daemon to cold-scan/live-watch)\n", verb, ShortRepoID(id), dialErr)
+	slog.Debug("repo add: daemon not reachable; wrote directly", "err", dialErr)
+	fmt.Fprintf(w, "%s repo %s (daemon offline; start it to cold-scan and live-watch)\n", verb, ShortRepoID(id))
 	if !existedLocal {
 		promptAliasAfterAdd(ctx, w, id, "", root)
 	}
@@ -248,5 +252,6 @@ func registerClonedRepo(ctx context.Context, dest string, wait bool) (id string,
 		_ = os.RemoveAll(dest)
 		return "", false, "", fmt.Errorf("repo add: %w", addErr)
 	}
-	return id, existed, fmt.Sprintf("direct write; daemon dial failed: %v", dialErr), nil
+	slog.Debug("repo add: daemon not reachable; wrote directly", "err", dialErr)
+	return id, existed, "daemon offline; start it to cold-scan and live-watch", nil
 }
