@@ -31,14 +31,20 @@ exact matches it also returns.
 | consul  |  37,272 |        3m 45s |         +6.9s |            13.9 ms |             0.49 ms |         0.9966 |      113 MiB |       129 MiB |
 | vault   |  38,800 |        3m 33s |         +7.9s |            15.4 ms |             0.50 ms |         0.9980 |      118 MiB |       129 MiB |
 | tidb    | 113,055 |          13 min |        +24.4s |            35.6 ms |             0.60 ms |         0.9885 |      343 MiB |       532 MiB |
-| k8s     | 220,369 |          35 min |        +51.8s |                n/a |             0.57 ms |            n/a |          n/a |     1,080 MiB |
+| k8s     | 220,369 |          35 min |        +51.8s |           88.7 ms* |             0.57 ms |        0.9839* |     666 MiB* |     1,080 MiB |
 
-The `k8s` row is **usearch-only**: at 220k symbols an exact in-RAM memvec index is
-impractical (which is exactly the regime usearch exists for), so its memvec
-columns and the usearch recall (measured *against* memvec) are `n/a`. The point it
-makes on its own: **usearch query latency stays flat (0.57 ms p95) even at 220k -
-the same sub-millisecond it posts at 11k** - while its index costs ~1 GB of RAM
-and a ~52 s one-time build.
+\* The `k8s` memvec figures and its usearch recall come from a **separate
+sampled-oracle run**, not normal operation. At 220k symbols you would not run
+memvec in production - an exact scan is ~89 ms per query - so the main slate skips
+it. To still get a recall number here, we built memvec once over a 2,000-query
+sample purely as the oracle. The usearch *build* and *query* columns are from the
+production-representative oracle-free run; the oracle run's build times were
+inflated by holding both indexes resident under memory pressure, so they are not
+used. Two things this row shows: **usearch query latency stays flat (0.57 ms p95)
+even at 220k** - the same sub-millisecond it posts at 11k, while an exact scan
+would be ~155x slower - and **its recall keeps bending with size (0.9839 at the
+`default` profile), which the `balanced` profile pulls back to ~0.995** (see the
+profile table below).
 
 Three things the curve makes clear:
 
@@ -49,9 +55,10 @@ Three things the curve makes clear:
   exact memvec index is no longer practical at all. That is O(n) linear scan versus
   O(log n) graph search.
 - **Recall holds, then bends.** usearch stays at ~0.997+ up through ~39k symbols,
-  then dips to **~0.988 at 113k** - the HNSW approximation showing its cost right
-  where you'd reach for usearch. Still high, but no longer ~1.0 (and the build
-  profile below can buy most of it back).
+  then dips to **~0.988 at 113k** and **~0.984 at 220k** (`default` profile) - the
+  HNSW approximation showing its cost right where you'd reach for usearch. Still
+  high, but no longer ~1.0 - and the `balanced` build profile below buys most of it
+  back (~0.995 at 220k).
 - **Time to ready is the same for both backends.** It's dominated by *embedding*,
   which is backend-independent (41s → 13 min as the repo grows). usearch adds only
   a small index-build premium on top (1.4s → 24s); memvec adds essentially none.
@@ -85,12 +92,14 @@ are the median of repeated runs.
 | consul  |  37,272 |        6.9s / 0.9966 |       3.2s / 0.9953 |            7.1s / 0.9987 |         25.2s / 0.9998 |
 | vault   |  38,800 |        7.9s / 0.9980 |       3.5s / 0.9955 |            7.9s / 0.9983 |         27.5s / 0.9997 |
 | tidb    | 113,055 |       24.4s / 0.9885 |      12.0s / 0.9791 |           27.4s / 0.9941 |         97.3s / 0.9990 |
-| k8s     | 220,369 |         51.8s / n/a |                   - |             51.5s / n/a |                      - |
+| k8s     | 220,369 |      51.8s / 0.9839* |                   - |          51.5s / 0.9948* |                      - |
 
-(k8s recall is `n/a` - no exact memvec oracle at that size - and only `default`
-and `balanced` were built. Note `balanced` (parallel, ef128) lands at essentially
-the same wall-clock as `default` (serial, ef64) even at 220k, so the wider beam is
-effectively free there; on a graph this large `balanced` is the clear pick.)
+(k8s recall is `*`-sourced from the sampled-oracle run described above; only
+`default` and `balanced` were built. The numbers make the large-repo case
+plainly: `balanced` (parallel, ef128) lands at essentially the same wall-clock as
+`default` (serial, ef64) even at 220k - the wider beam is effectively free there -
+yet recovers recall from 0.9839 to 0.9948. On a graph this large `balanced` is the
+clear pick.)
 
 What the profiles are for:
 
