@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
 
 	application "github.com/whiskeyjimbo/veska/internal/application"
@@ -13,6 +14,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/wiki"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/ports"
+	"github.com/whiskeyjimbo/veska/internal/core/protocol"
 )
 
 // wikiFixtureService constructs a HotZoneService pre-populated with fixture data for MCP handler tests.
@@ -105,6 +107,26 @@ func TestHotZone_ReturnsRankedData(t *testing.T) {
 		if got != want {
 			t.Errorf("zone %d diverges: tool=%+v page=%+v", i, got, want)
 		}
+	}
+}
+
+// TestHotZone_ShallowCloneSurfacesDegradedReason verifies that on a depth=1
+// clone (where churn ranking is freq=1 noise) the response carries the shallow
+// degraded reason even when zones come back.
+func TestHotZone_ShallowCloneSurfacesDegradedReason(t *testing.T) {
+	svc := wikiFixtureService(t)
+	clone := makeShallowCloneRepo(t)
+	repoRoot := func(context.Context, string) (string, error) { return clone, nil }
+
+	r := NewRegistry()
+	RegisterWikiTools(r, svc, repoRoot, nil)
+
+	resp, rpcErr := dispatchHotZone(t, r, map[string]any{"repo_id": "r1", "branch": "main"})
+	if rpcErr != nil {
+		t.Fatalf("err: %+v", rpcErr)
+	}
+	if !slices.Contains(resp.DegradedReasons, protocol.DegradedReasonShallowClone) {
+		t.Errorf("expected degraded_reasons to contain %q, got %v", protocol.DegradedReasonShallowClone, resp.DegradedReasons)
 	}
 }
 

@@ -144,6 +144,22 @@ func parseUnix(s string) (time.Time, error) {
 	return time.Unix(secs, 0).UTC(), nil
 }
 
+// IsShallow reports whether repoRoot is a shallow clone (e.g. cloned with
+// --depth=1, as URL-cloned repos are). A shallow clone has a single commit, so
+// history-dependent reads - hot-zone churn, owner blame, context-pack file
+// history - return plausible-but-wrong data; callers surface a degraded reason
+// when this is true. A non-shallow or full repo returns false.
+func IsShallow(ctx context.Context, repoRoot string) (bool, error) {
+	if repoRoot == "" {
+		return false, fmt.Errorf("git rev-parse: repoRoot is empty")
+	}
+	out, err := runGit(ctx, repoRoot, []string{"-C", repoRoot, "rev-parse", "--is-shallow-repository"})
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) == "true", nil
+}
+
 // runGit executes a git command scoped to the repository root and returns its output.
 func runGit(ctx context.Context, repoRoot string, args []string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)

@@ -12,6 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/application/contextpack"
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 	"github.com/whiskeyjimbo/veska/internal/core/protocol"
+	gitinfra "github.com/whiskeyjimbo/veska/internal/infrastructure/git"
 )
 
 // ContextPackOption configures RegisterContextPackTool, using a variadic shape to support future configuration parameters without breaking the function signature.
@@ -163,6 +164,11 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		reconciling := reconcilingForRepos(reconcile, []string{p.RepoID})
 		if len(reconciling) > 0 {
 			reasons = append(reasons, protocol.DegradedReasonWakeReconciling)
+		}
+		// A shallow clone has one commit, so the pack's per-file history is
+		// truncated and not authoritative.
+		if shallow, serr := gitinfra.IsShallow(ctx, root); serr == nil && shallow {
+			reasons = AppendDegradedReason(reasons, protocol.DegradedReasonShallowClone)
 		}
 		return contextPackResponse{
 			Pack:                 pack,
