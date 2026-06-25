@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
 // EdgeReaderRepo implements ports.EdgeReader using a SQLite database.
@@ -19,12 +21,15 @@ func NewEdgeReaderRepo(readDB *sql.DB) *EdgeReaderRepo {
 	return &EdgeReaderRepo{readDB: readDB}
 }
 
-// InboundEdges returns a map of destination node IDs to their source node IDs.
+// InboundEdges returns a map of destination node IDs to their source node IDs
+// over STRUCTURAL edges only - advisory edges (SIMILAR_TO) are excluded so
+// callers walking impact/reachability don't bridge unrelated subgraphs.
 func (r *EdgeReaderRepo) InboundEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error) {
 	return r.adjacency(ctx, repoID, branch, nodeIDs, "dst_node_id", "src_node_id", "")
 }
 
-// OutboundEdges returns a map of source node IDs to their destination node IDs.
+// OutboundEdges returns a map of source node IDs to their destination node IDs
+// over STRUCTURAL edges only (advisory SIMILAR_TO edges excluded; see InboundEdges).
 func (r *EdgeReaderRepo) OutboundEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error) {
 	return r.adjacency(ctx, repoID, branch, nodeIDs, "src_node_id", "dst_node_id", "")
 }
@@ -58,6 +63,19 @@ func (r *EdgeReaderRepo) adjacency(ctx context.Context, repoID, branch string, n
 		// upper-cased in Go to tolerate a caller passing mixed case.
 		kindClause = " AND kind = ?"
 		args = append(args, strings.ToUpper(kind))
+	} else {
+		// No explicit kind: return STRUCTURAL adjacency only. Advisory edges
+		// (SIMILAR_TO) are excluded so impact/reachability callers don't bridge
+		// unrelated subgraphs through look-alike symbols. Listing what to
+		// exclude (rather than what to include) keeps new structural edge kinds
+		// traversed by default.
+		advisory := domain.AdvisoryEdgeKinds()
+		ph := make([]string, len(advisory))
+		for i, k := range advisory {
+			ph[i] = "?"
+			args = append(args, string(k))
+		}
+		kindClause = " AND kind NOT IN (" + strings.Join(ph, ",") + ")"
 	}
 	query := fmt.Sprintf(
 		`SELECT %s, %s FROM edges

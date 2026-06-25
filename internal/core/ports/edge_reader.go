@@ -13,12 +13,18 @@ import "context"
 // on a present key meaning "queried".
 // Implementations must scope the read to (repoID, branch) because edges are
 // only meaningful within a branch.
+//
+// Both methods walk STRUCTURAL edges only: advisory edges (domain.IsAdvisory,
+// currently SIMILAR_TO) are excluded so impact and reachability callers don't
+// bridge unrelated subgraphs through semantically-similar look-alike symbols.
 type EdgeReader interface {
 	// InboundEdges returns, for each node ID, the source node IDs where the
-	// queried node is the destination. Conceptually: who references these nodes.
+	// queried node is the destination, over structural edges only.
+	// Conceptually: who structurally references these nodes.
 	InboundEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error)
 
 	// OutboundEdges returns, for each node ID, the destination node IDs of
-	// edges originating from that node. Conceptually: what do these nodes reference.
+	// structural edges originating from that node.
+	// Conceptually: what do these nodes structurally reference.
 	OutboundEdges(ctx context.Context, repoID, branch string, nodeIDs []string) (map[string][]string, error)
 }

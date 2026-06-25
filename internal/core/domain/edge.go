@@ -39,6 +39,32 @@ var validEdgeKinds = map[EdgeKind]struct{}{
 	EdgeRoutes:    {},
 }
 
+// advisoryEdgeKinds are non-structural edges: they record a suggested or
+// semantic relationship for review, not an actual dependency in the code.
+// Impact and reachability traversal (blast radius, context packs, entry-point
+// detection) must exclude them - a SIMILAR_TO edge between two look-alike
+// symbols would otherwise bridge unrelated subgraphs and inflate the result.
+// Everything not listed here is structural and IS traversed, so new structural
+// edge kinds are included automatically.
+var advisoryEdgeKinds = map[EdgeKind]struct{}{
+	EdgeSimilarTo: {},
+}
+
+// IsAdvisory reports whether the edge kind is advisory (semantic/suggested)
+// rather than structural. Advisory edges are excluded from impact and
+// reachability traversal.
+func (k EdgeKind) IsAdvisory() bool {
+	_, ok := advisoryEdgeKinds[k]
+	return ok
+}
+
+// AdvisoryEdgeKinds returns the advisory (non-structural) edge kinds. Adapters
+// building a "structural neighbors" query exclude these; the order is stable
+// for deterministic SQL.
+func AdvisoryEdgeKinds() []EdgeKind {
+	return []EdgeKind{EdgeSimilarTo}
+}
+
 // Confidence is an ordered enum representing how certain an edge relationship is.
 type Confidence int
 

@@ -119,6 +119,72 @@ func TestEdgeReaderRepo_ScopedByRepoAndBranch(t *testing.T) {
 	}
 }
 
+// TestEdgeReaderRepo_ExcludesAdvisoryEdges asserts that the kind-blind
+// adjacency methods walk structural edges only: an advisory SIMILAR_TO edge
+// must not surface as a neighbor (it would otherwise bridge unrelated
+// subgraphs and inflate blast radius / context packs), while a structural
+// CALLS edge to the same node still does.
+func TestEdgeReaderRepo_ExcludesAdvisoryEdges(t *testing.T) {
+	dir := t.TempDir()
+	db, err := sqlite.OpenWithOptions(filepath.Join(dir, "veska.db"),
+		sqlite.Options{BackupDir: filepath.Join(t.TempDir(), "backups")})
+	if err != nil {
+		t.Fatalf("OpenWithOptions: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().UnixMilli()
+	if _, err := db.Exec(`INSERT INTO repos (repo_id, root_path, added_at) VALUES (?,?,?)`,
+		"r1", "/tmp/r1", now); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	for _, id := range []string{"caller", "sim", "target"} {
+		if _, err := db.Exec(`INSERT INTO nodes (
+			node_id, branch, repo_id, language, kind, symbol_path, file_path,
+			line_start, line_end, content_hash, last_promoted_at, actor_id, actor_kind
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			id, "main", "r1", "go", "function", id, id+".go",
+			1, 10, "h-"+id, now, "service:veska", "system"); err != nil {
+			t.Fatalf("insert node %s: %v", id, err)
+		}
+	}
+	er := sqlite.NewEdgeRepo(db)
+	// caller --CALLS--> target  (structural)
+	// sim    --SIMILAR_TO--> target  (advisory; must be excluded)
+	call, _ := domain.NewEdge(domain.EdgeSpec{Src: "caller", Tgt: "target", Kind: domain.EdgeCalls}, domain.WithConfidence(domain.Definite))
+	sim, _ := domain.NewEdge(domain.EdgeSpec{Src: "sim", Tgt: "target", Kind: domain.EdgeSimilarTo}, domain.WithConfidence(domain.Unresolved))
+	if err := er.SaveEdges(context.Background(), "r1", "main", []*domain.Edge{call, sim}); err != nil {
+		t.Fatalf("SaveEdges: %v", err)
+	}
+	r := sqlite.NewEdgeReaderRepo(db)
+	ctx := context.Background()
+
+	in, err := r.InboundEdges(ctx, "r1", "main", []string{"target"})
+	if err != nil {
+		t.Fatalf("InboundEdges: %v", err)
+	}
+	if !equalSorted(in["target"], []string{"caller"}) {
+		t.Errorf("inbound to target: got %v want [caller] (SIMILAR_TO 'sim' must be excluded)", in["target"])
+	}
+
+	out, err := r.OutboundEdges(ctx, "r1", "main", []string{"sim"})
+	if err != nil {
+		t.Fatalf("OutboundEdges: %v", err)
+	}
+	if len(out["sim"]) != 0 {
+		t.Errorf("outbound from sim should be empty (only a SIMILAR_TO edge), got %v", out["sim"])
+	}
+
+	// The explicit CALLS-filtered path is unaffected and still returns the caller.
+	call2, err := r.InboundCallEdges(ctx, "r1", "main", []string{"target"})
+	if err != nil {
+		t.Fatalf("InboundCallEdges: %v", err)
+	}
+	if !equalSorted(call2["target"], []string{"caller"}) {
+		t.Errorf("InboundCallEdges to target: got %v want [caller]", call2["target"])
+	}
+}
+
 func equalSorted(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
