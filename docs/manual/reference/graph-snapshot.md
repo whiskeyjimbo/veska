@@ -90,6 +90,29 @@ The top-level object:
 `module`, `version`, `language`, `usage_count`, `import_count`, and
 `top_call_sites[]` (`src_node_id`, `symbol_path`).
 
+## Viewing the snapshot (`veska graph serve`)
+
+`veska graph serve` starts a read-only web viewer over localhost:
+
+```bash
+veska graph serve graph-snapshot.json   # serve a committed snapshot (no daemon)
+veska graph serve                        # live in-process export of the current repo
+veska graph serve --addr 127.0.0.1:9000  # pick the bind address
+```
+
+It renders the graph with [Cytoscape.js](https://js.cytoscape.org/) (vendored,
+embedded in the binary - no network at view time). The initial view is scoped to
+the entry points plus one representative node per hot-zone file; double-click a
+node (or use the **Expand neighbors** button) to grow the visible subgraph, so a
+10K+ node graph stays responsive. Nodes are colored by entry-point / hot-zone
+classification; clicking one shows its `file:line`, summary, and full source.
+The name search box filters the visible nodes and pulls matching symbols onto the
+canvas. The server binds to localhost and exposes no write endpoints.
+
+A live export ranks hot zones and entry points over the whole graph, so on a
+large repo the server can take tens of seconds to bind; serving a committed
+snapshot file is instant.
+
 ## Size
 
 The snapshot embeds each node's source, so it scales with repo size (a ~13K-node

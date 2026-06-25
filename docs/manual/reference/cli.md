@@ -1150,6 +1150,41 @@ veska graph export graph-snapshot.json
 ```
 
 
+#### `veska graph serve`
+
+Serve a read-only web graph viewer over localhost
+
+Start a local, read-only HTTP server that renders the code graph in a
+browser: pan/zoom an explorable graph, click a node for its file:line,
+summary, and source, and search symbols by name. Nodes are colored by
+entry-point / hot-zone classification.
+
+Given a snapshot file it serves that committed snapshot (no daemon needed).
+With no path (or --live) it exports a fresh snapshot from the live DB
+in-process and serves that. The server binds to localhost and has no
+write endpoints.
+
+```
+veska graph serve [snapshot.json] [flags]
+```
+
+**Example:**
+
+```sh
+veska graph serve                 # live export of the current repo
+  veska graph serve graph-snapshot.json   # serve a committed snapshot
+```
+
+**Flags:**
+
+```
+      --addr string     localhost bind address (host:port) (default "127.0.0.1:8744")
+      --branch string   branch for --live (default: the repo's active branch)
+      --live            export a fresh snapshot from the live DB even when a snapshot file is given
+      --repo string     repo id, short_id, or alias for --live (default: cwd repo, or the sole registered repo)
+```
+
+
 ### `veska help`
 
 Help about any command

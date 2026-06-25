@@ -41,33 +41,9 @@ func RunExport(ctx context.Context, p ExportParams) error {
 	if p.OutPath == "" {
 		return fmt.Errorf("graph export: output path is required")
 	}
-
-	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
-	pools, err := sqlite.OpenPools(dbPath)
-	if err != nil {
-		return fmt.Errorf("graph export: open graph db: %w", err)
-	}
-	defer func() { _ = pools.Close() }()
-
-	rec, err := resolveExportRepo(ctx, pools, p.RepoArg)
+	snap, repoID, err := buildSnapshot(ctx, p.RepoArg, p.Branch)
 	if err != nil {
 		return err
-	}
-	branch := p.Branch
-	if branch == "" {
-		branch = rec.ActiveBranch
-	}
-	if branch == "" {
-		branch = "main"
-	}
-
-	svc, err := composition.NewGraphExportService(pools, staging.NewArea())
-	if err != nil {
-		return fmt.Errorf("graph export: %w", err)
-	}
-	snap, err := svc.Export(ctx, rec.RepoID, branch, rec.RootPath)
-	if err != nil {
-		return fmt.Errorf("graph export: %w", err)
 	}
 	data, err := graphexport.Marshal(snap)
 	if err != nil {
@@ -77,8 +53,44 @@ func RunExport(ctx context.Context, p ExportParams) error {
 		return fmt.Errorf("graph export: write %s: %w", p.OutPath, err)
 	}
 	fmt.Fprintf(p.Out, "wrote %s (%d nodes, %d edges) for repo %s\n",
-		p.OutPath, len(snap.Nodes), len(snap.Edges), repocmd.ShortRepoID(rec.RepoID))
+		p.OutPath, len(snap.Nodes), len(snap.Edges), repocmd.ShortRepoID(repoID))
 	return nil
+}
+
+// buildSnapshot opens the local graph DB, resolves the target repo/branch, and
+// exports a fresh in-process snapshot. Shared by `graph export` (writes it to
+// a file) and `graph serve --live` (serves it over HTTP), so both surfaces go
+// through the identical export function. Returns the snapshot and the resolved
+// repo id.
+func buildSnapshot(ctx context.Context, repoArg, branchArg string) (graphexport.Snapshot, string, error) {
+	dbPath := filepath.Join(config.DefaultVectorDir(), "veska.db")
+	pools, err := sqlite.OpenPools(dbPath)
+	if err != nil {
+		return graphexport.Snapshot{}, "", fmt.Errorf("graph export: open graph db: %w", err)
+	}
+	defer func() { _ = pools.Close() }()
+
+	rec, err := resolveExportRepo(ctx, pools, repoArg)
+	if err != nil {
+		return graphexport.Snapshot{}, "", err
+	}
+	branch := branchArg
+	if branch == "" {
+		branch = rec.ActiveBranch
+	}
+	if branch == "" {
+		branch = "main"
+	}
+
+	svc, err := composition.NewGraphExportService(pools, staging.NewArea())
+	if err != nil {
+		return graphexport.Snapshot{}, "", fmt.Errorf("graph export: %w", err)
+	}
+	snap, err := svc.Export(ctx, rec.RepoID, branch, rec.RootPath)
+	if err != nil {
+		return graphexport.Snapshot{}, "", fmt.Errorf("graph export: %w", err)
+	}
+	return snap, rec.RepoID, nil
 }
 
 // resolveExportRepo selects the repo to export without contacting the daemon:

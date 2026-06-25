@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Veska graph viewer</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header id="bar">
+    <span id="title">Veska graph</span>
+    <span id="repo" class="muted"></span>
+    <input id="search" type="search" placeholder="Search symbols by name…" autocomplete="off" />
+    <span id="stats" class="muted"></span>
+    <span class="legend">
+      <span class="swatch entry"></span>entry point
+      <span class="swatch hot"></span>hot zone
+      <span class="swatch normal"></span>other
+    </span>
+  </header>
+  <main>
+    <div id="cy"></div>
+    <aside id="panel" class="empty">
+      <p class="hint">Click a node to see its details. Double-click to expand its neighbors.</p>
+    </aside>
+  </main>
+  <div id="loading">Loading graph…</div>
+  <script src="/static/cytoscape.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
