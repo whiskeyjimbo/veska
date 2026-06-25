@@ -115,16 +115,16 @@ func TestRepoAddCmd_DirectFallback(t *testing.T) {
 	if !strings.Contains(out.String(), "added repo ") {
 		t.Errorf("stdout missing 'added repo': %q", out.String())
 	}
-	// Daemon offline → fallback path must announce itself so users know
-	// the daemon-restart caveat applies. Post-0cg the message now includes
-	// the underlying dial error so users can tell 'daemon down' from
-	// 'daemon up but unreachable'.
+	// Daemon offline → the fallback path must announce itself (so users know
+	// the repo is registered but not yet scanned) and point at starting the
+	// daemon. The raw dial error is logged at debug, not printed, so a
+	// successful add reads as success rather than an alarm.
 	o := out.String()
-	if !strings.Contains(o, "daemon dial failed") {
-		t.Errorf("stdout missing 'daemon dial failed' note: %q", o)
+	if !strings.Contains(o, "daemon offline") {
+		t.Errorf("stdout missing 'daemon offline' note: %q", o)
 	}
-	if !strings.Contains(o, "restart daemon") {
-		t.Errorf("stdout missing 'restart daemon' guidance: %q", o)
+	if !strings.Contains(o, "cold-scan") {
+		t.Errorf("stdout missing cold-scan/start-daemon guidance: %q", o)
 	}
 
 	// Sanity: the DB exists at the expected path.
