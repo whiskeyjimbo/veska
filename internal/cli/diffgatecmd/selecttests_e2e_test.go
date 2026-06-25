@@ -62,6 +62,7 @@ func TestRunSelectTests_E2E_SelectsCoveringTest(t *testing.T) {
 	}
 	if selected == nil {
 		t.Fatalf("TestFoo not selected for changed Foo; got packages %+v", rep.Packages)
+		return
 	}
 	// foo_test.go is unchanged, so the package is run via -run filter (not run-all).
 	if selected.RunAll {
