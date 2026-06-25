@@ -418,12 +418,13 @@ func extractCallsFromBody(q *sitter.Query, body *sitter.Node, src []byte, caller
 func buildFunctionNodeFromCaptures(declNode, nameNode *sitter.Node, src []byte, repoID, path string) *domain.Node {
 	name := string(src[nameNode.StartByte():nameNode.EndByte()])
 	lr := lineRange(declNode)
-	// Go allows multiple init functions per file. We append a line number suffix to
-	// their IDs to prevent database primary key collisions while keeping their display
-	// names as 'init'.
+	// Go allows multiple init functions per file, and multiple blank functions
+	// (func _()). Both legitimately share (repo, path, kind, name), so we append
+	// a line-number suffix to their node IDs to prevent collisions (one symbol
+	// silently dropping the other) while keeping their display names as-is.
 	idName := name
-	if name == "init" {
-		idName = fmt.Sprintf("init@L%d", lr.Start)
+	if name == "init" || name == "_" {
+		idName = fmt.Sprintf("%s@L%d", name, lr.Start)
 	}
 	id := nodeID(repoID, path, domain.KindFunction, idName)
 	raw := string(src[declNode.StartByte():declNode.EndByte()])
