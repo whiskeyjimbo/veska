@@ -1211,6 +1211,44 @@ func init() {
 	}
 }
 
+// TestParseFile_MultipleBlankFunctions guards the blank-identifier counterpart
+// to the multiple-init case: Go allows several func _() in one file, and they
+// must get distinct node IDs (not silently collapse to one) while keeping "_"
+// as their display name.
+func TestParseFile_MultipleBlankFunctions(t *testing.T) {
+	src := []byte(`package foo
+
+func _() {
+	_ = 1
+}
+
+func _() {
+	_ = 2
+}
+`)
+	p := treesitter.NewGoParser()
+	result, err := p.ParseFile(context.Background(), repoID, filePath, src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	blanks := make([]*domain.Node, 0, 2)
+	for _, n := range result.Nodes {
+		if n.Name == "_" {
+			blanks = append(blanks, n)
+		}
+	}
+	if len(blanks) != 2 {
+		t.Fatalf("expected 2 blank func() nodes, got %d", len(blanks))
+	}
+	seen := map[domain.NodeID]int{}
+	for _, n := range blanks {
+		seen[n.ID]++
+	}
+	if len(seen) != 2 {
+		t.Errorf("expected 2 distinct node IDs, got %d (duplicates: %v)", len(seen), seen)
+	}
+}
+
 func nodeNames(nodes []*domain.Node) []string {
 	names := make([]string, len(nodes))
 	for i, n := range nodes {
