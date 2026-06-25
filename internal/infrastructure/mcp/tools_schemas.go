@@ -175,6 +175,35 @@ var getCallChainInputSchema = json.RawMessage(`{
   }
 }`)
 
+var findImplementationsInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Given an interface, returns the concrete types that implement it; given a concrete type, returns the interfaces it satisfies. Direction is inferred from the seed kind. One of node_id or symbol is required.",
+  "properties": {
+    "node_id": {"type": "string", "description": "Resolve directly by node_id."},
+    "symbol":  {"type": "string", "description": "Type or interface name; resolved against repo_id+branch (ambiguity rejected)."},
+    "repo_id": {"type": "string"},
+    "branch":  {"type": "string"},
+    "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
+  }
+}`)
+
+var getTypeHierarchyInputSchema = json.RawMessage(`{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Returns the IMPLEMENTS + EMBEDS neighborhood of a type, both directions, depth-bounded. One of node_id or symbol is required.",
+  "properties": {
+    "node_id": {"type": "string", "description": "Resolve directly by node_id."},
+    "symbol":  {"type": "string", "description": "Type or interface name; resolved against repo_id+branch (ambiguity rejected)."},
+    "repo_id": {"type": "string"},
+    "branch":  {"type": "string"},
+    "depth":   {"type": "integer", "minimum": 1, "maximum": 10, "description": "Traversal depth (default 3, max 10)."},
+    "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
+  }
+}`)
+
 var blastRadiusInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",

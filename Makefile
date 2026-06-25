@@ -12,7 +12,7 @@ LAYERCHECK_BIN  := $(BINDIR)/layercheck
 SQLITE_TAGS    ?= sqlite_fts5
 SQLITE_CGO_ENV ?= CGO_ENABLED=1
 
-.PHONY: all build build-small build-fat fetch-embed-assets notices install release-archive changelog test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-batchsize eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
+.PHONY: all build build-small build-fat fetch-embed-assets notices install release-archive changelog test lint vet layercheck fatfile-ratchet noidleak cliparity clean loadtest test-mcp test-mcp-deep test-mcp-bootstrap eval-recall eval-recall-projection eval-autolink-fp eval-type-hierarchy eval-neardup-threshold eval-revalidate-bench eval-wake-latency eval-queue-fuzz eval-embed-throughput eval-embedder-bench eval-embed-batchsize eval-embed-models eval-embed-models-full eval-embed-models-condense eval-embed-models-fuse eval-dbbench eval-dbbench-cgo docs-gen docs-check
 
 # `all` uses build-small to keep the test loop fast - the model2vec assets
 # add a network fetch + ~62MB to every CI/dev run. End-user packaging
@@ -351,6 +351,14 @@ eval-recall-projection:
 # tools/loadtest/autolink/README.md.
 eval-autolink-fp:
 	AUTOLINK_POP=$${AUTOLINK_POP:-1000} $(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestAutolinkFP ./tools/loadtest/autolink/ -v
+
+# eval-type-hierarchy: IMPLEMENTS-edge accuracy oracle. Cold-scans THIS repo
+# in-process through the real parser+promotion, computes ground truth with
+# go/types over the same files, and reports precision/recall. Optimizes for
+# precision (a false IMPLEMENTS edge misleads worse than a missing one).
+# See tools/loadtest/typehierarchy/.
+eval-type-hierarchy:
+	$(SQLITE_CGO_ENV) go test -tags "eval $(SQLITE_TAGS)" -run TestTypeHierarchyOracle ./tools/loadtest/typehierarchy/ -v -count=1 -timeout 10m
 
 # eval-neardup-threshold: near-duplicate threshold calibration.
 # Embeds a curated corpus of real Go functions + mechanical near-dup variants

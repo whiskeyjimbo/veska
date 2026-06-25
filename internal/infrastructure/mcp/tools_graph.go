@@ -171,6 +171,20 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		Handler:         makeGetCallChainHandler(graph, resolve, cfg.resolveInbound, cfg.repos, cfg.scans, cfg.reconcile),
 	})
 	r.MustRegister(ToolSpec{
+		Name:            "eng_find_implementations",
+		Description:     "Given an interface, returns the concrete types that satisfy it; given a concrete type, returns the interfaces it implements. Direction is inferred from the seed kind, so no direction param is needed. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity rejected). Backed by IMPLEMENTS edges resolved from Go method sets; edges carry a confidence (Definite/Strong/Probable) reflecting how the methods matched.",
+		IncludesStaging: false,
+		InputSchema:     findImplementationsInputSchema,
+		Handler:         makeFindImplementationsHandler(graph, cfg.repos, cfg.scans, cfg.reconcile),
+	})
+	r.MustRegister(ToolSpec{
+		Name:            "eng_get_type_hierarchy",
+		Description:     "Walk the type hierarchy (IMPLEMENTS + EMBEDS edges) around a type, both directions, depth-bounded. Use to see what a type embeds, what embeds it, and which interfaces sit above or below it in one query. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity rejected).",
+		IncludesStaging: false,
+		InputSchema:     getTypeHierarchyInputSchema,
+		Handler:         makeGetTypeHierarchyHandler(graph, cfg.repos, cfg.scans, cfg.reconcile),
+	})
+	r.MustRegister(ToolSpec{
 		Name:            "eng_get_file_nodes",
 		Description:     "Return all nodes for a file path (absolute, or repo-relative when repo_id is given); staged nodes take precedence when available.",
 		IncludesStaging: true,
