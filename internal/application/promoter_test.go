@@ -69,6 +69,59 @@ func TestPromote_PrunesDroppedNodeVectors(t *testing.T) {
 	}
 }
 
+// TestPromote_WholeFileDeletion_PrunesNodesAndVectors covers the file-removal
+// path: when a watched file is deleted, the ingester stages a tombstone (an
+// empty file entry) instead of dropping the path from staging, so promotion
+// deletes every node the file owned and prunes their vectors. Without the
+// tombstone the gone file's nodes/embeddings would linger until a full re-scan.
+func TestPromote_WholeFileDeletion_PrunesNodesAndVectors(t *testing.T) {
+	db := openMemDB(t)
+	insertTestRepo(t, db, "repo-del")
+	ctx := context.Background()
+	actor := domain.Actor{ID: "service:veska", Kind: domain.ActorKindSystem}
+
+	vstore := memvec.New()
+	if err := vstore.UpsertEmbeddings(ctx, "repo-del", "main", []domain.EmbeddingRow{
+		{NodeID: "n1", Vector: []float32{1, 0}, ContentHash: "h1", ModelID: "m"},
+		{NodeID: "n2", Vector: []float32{0, 1}, ContentHash: "h2", ModelID: "m"},
+	}); err != nil {
+		t.Fatalf("seed vectors: %v", err)
+	}
+
+	store := sqlite.NewPromotionStore(db,
+		[]sqlite.PromotionSink{sqlite.NewFTSSink(), sqlite.NewEmbedRefSink()},
+		sqlite.WithVectorPruner(vstore.DeleteNodes))
+	sa := staging.NewArea()
+	p := application.NewPromoter(sa, store)
+
+	mk := func(id string) *domain.Node {
+		n, _ := domain.NewNode(domain.NodeSpec{ID: id, Path: "gone.go", Name: id, Kind: domain.KindFunction})
+		return n
+	}
+
+	// Promote 1: the file with both nodes.
+	sa.Stage("repo-del", "main", "gone.go", staging.File{Nodes: []*domain.Node{mk("n1"), mk("n2")}})
+	if err := p.Promote(ctx, "repo-del", "main", "sha1", actor); err != nil {
+		t.Fatalf("Promote 1: %v", err)
+	}
+	if got := countNodes(t, db); got != 2 {
+		t.Fatalf("after promote 1: want 2 nodes, got %d", got)
+	}
+
+	// Promote 2: the tombstone (file deleted from disk). All nodes must go, and
+	// both vectors must be pruned.
+	sa.Stage("repo-del", "main", "gone.go", staging.File{})
+	if err := p.Promote(ctx, "repo-del", "main", "sha2", actor); err != nil {
+		t.Fatalf("Promote 2 (tombstone): %v", err)
+	}
+	if got := countNodes(t, db); got != 0 {
+		t.Fatalf("after tombstone promote: want 0 nodes, got %d", got)
+	}
+	if hits, _ := vstore.Search(ctx, "repo-del", "main", []float32{0, 1}, 2, domain.VectorFilter{}); len(hits) != 0 {
+		t.Fatalf("after tombstone promote: want 0 vectors, got %d (%+v)", len(hits), hits)
+	}
+}
+
 // newTestPromoter wires a Promoter to a real sqlite.PromotionStore over the
 // given test DB, with the production FTS + embedding-ref sinks registered.
 // Optional seams (check runner, added-lines) are supplied via PromoterOption.

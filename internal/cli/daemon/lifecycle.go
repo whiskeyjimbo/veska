@@ -9,9 +9,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/whiskeyjimbo/veska/internal/application/embedder"
+	"github.com/whiskeyjimbo/veska/internal/core/ports"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/repo"
 	"github.com/whiskeyjimbo/veska/internal/infrastructure/sqlite"
 	"github.com/whiskeyjimbo/veska/internal/platform/observability"
@@ -208,7 +210,9 @@ func sumCounts(counts map[string]int) int {
 }
 
 // runWatchLoop reads from the multi-repo watcher and forwards each file event
-// to Ingester.Save. The loop terminates when ctx is canceled or Events
+// to the ingester: write events to Ingester.Save, remove events to
+// Ingester.DeleteFile (which stages a tombstone so promotion deletes the gone
+// file's nodes/vectors). The loop terminates when ctx is canceled or Events
 // closes.
 // Branch resolution: we look up each event's repo via repo.Get
 // to use its recorded active_branch instead of the previous hardcoded "main".
@@ -224,6 +228,14 @@ func (d *Daemon) runWatchLoop(ctx context.Context) {
 	// path, so the cold-scan and hot (fsnotify) paths must agree.
 	branchOf := make(map[string]string)
 	rootOf := make(map[string]string)
+	// Mirror the cold-scan walk filter: only files the parser understands can
+	// own nodes, so only those need a delete tombstone. An empty set (parser
+	// advertises no extensions) disables the filter so deletions are never
+	// silently dropped.
+	supportedExt := make(map[string]struct{})
+	for _, e := range d.ingester.SupportedExtensions() {
+		supportedExt[strings.ToLower(e)] = struct{}{}
+	}
 
 	for {
 		select {
@@ -233,12 +245,10 @@ func (d *Daemon) runWatchLoop(ctx context.Context) {
 			if !ok {
 				return
 			}
-			data, err := os.ReadFile(ev.Event.Path)
-			if err != nil {
-				slog.Debug("watch loop: read failed",
-					"repo_id", ev.RepoID, "path", ev.Event.Path, "err", err)
-				continue
-			}
+			// Branch/root must be resolved before the op split: a remove
+			// event has no readable file, so the old "ReadFile first" order
+			// dropped every deletion at the read error and never staged the
+			// tombstone that deletes the gone file's nodes/vectors.
 			branch, ok := branchOf[ev.RepoID]
 			if !ok {
 				rec, gerr := repo.Get(ctx, d.pools.ReadDB, ev.RepoID)
@@ -261,7 +271,23 @@ func (d *Daemon) runWatchLoop(ctx context.Context) {
 					"path", ev.Event.Path, "err", rerr)
 				continue
 			}
-			d.ingester.Save(ctx, ev.RepoID, branch, filepath.ToSlash(rel), data)
+			relSlash := filepath.ToSlash(rel)
+
+			if ev.Event.Op == ports.WatchOpRemove {
+				_, supported := supportedExt[strings.ToLower(filepath.Ext(ev.Event.Path))]
+				if supported || len(supportedExt) == 0 {
+					d.ingester.DeleteFile(ctx, ev.RepoID, branch, relSlash)
+				}
+				continue
+			}
+
+			data, err := os.ReadFile(ev.Event.Path)
+			if err != nil {
+				slog.Debug("watch loop: read failed",
+					"repo_id", ev.RepoID, "path", ev.Event.Path, "err", err)
+				continue
+			}
+			d.ingester.Save(ctx, ev.RepoID, branch, relSlash, data)
 		}
 	}
 }
