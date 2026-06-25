@@ -171,7 +171,7 @@ func relativizeHotZoneReport(r Report, root string) Report {
 	out := r
 	out.Zones = make([]HotZone, len(r.Zones))
 	for i, z := range r.Zones {
-		z.FilePath = relPath(root, z.FilePath)
+		z.FilePath = RelPath(root, z.FilePath)
 		out.Zones[i] = z
 	}
 	return out
@@ -183,13 +183,18 @@ func relativizeEntryPointsReport(r EntryPointsReport, root string) EntryPointsRe
 	out := r
 	out.EntryPoints = make([]EntryPoint, len(r.EntryPoints))
 	for i, e := range r.EntryPoints {
-		e.FilePath = relPath(root, e.FilePath)
+		e.FilePath = RelPath(root, e.FilePath)
 		out.EntryPoints[i] = e
 	}
 	return out
 }
 
-func relPath(root, p string) string {
+// RelPath rewrites an absolute path to a repoRoot-relative slash-form path
+// when possible, returning the input unchanged for relative paths or on
+// error. Exported so the graph-export snapshot can relativize node, hot-zone,
+// and entry-point paths through the same helper the wiki pages use (AC2: no
+// home/username leakage).
+func RelPath(root, p string) string {
 	if root == "" || !filepath.IsAbs(p) {
 		return p
 	}

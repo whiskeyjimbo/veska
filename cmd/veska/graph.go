@@ -201,3 +201,48 @@ The --ref-a/--ref-b flags remain accepted and take precedence over positional ar
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_changed_symbols shape)")
 	return cmd
 }
+
+// graphCmd is the parent for graph-snapshot subcommands. The structural
+// query verbs (calls/blast/changed) stay top-level for muscle memory; the
+// snapshot surface (export, and later serve) is grouped under `graph` because
+// it is a distinct, human-facing affordance rather than an agent query.
+func graphCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "graph",
+		Short:        "Export and explore the code graph as a shareable snapshot",
+		SilenceUsage: true,
+	}
+	cmd.AddCommand(graphExportCmd())
+	return cmd
+}
+
+// graphExportCmd wraps graphcmd.RunExport: serialize the resolved repo's graph
+// to a deterministic, shareable JSON snapshot.
+func graphExportCmd() *cobra.Command {
+	var repoFlag, branchFlag string
+	cmd := &cobra.Command{
+		Use:   "export <out.json>",
+		Short: "Write a deterministic JSON snapshot of the repo's code graph",
+		Long: `Serialize the repo's code graph - nodes, edges, hot zones, entry points,
+and dependencies, each node carrying its summary and source - to a single
+JSON file. The snapshot is deterministic (re-exporting an unchanged repo
+yields byte-identical output) and safe to commit so teammates skip indexing.
+
+It opens the local graph DB directly; no running daemon is required. The
+file is the shareable contract consumed by ` + "`veska graph serve`" + `.`,
+		Example:      "  veska graph export graph-snapshot.json\n  veska graph export --repo myproj /tmp/snap.json",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return graphcmd.RunExport(cmd.Context(), graphcmd.ExportParams{
+				OutPath: args[0],
+				RepoArg: repoFlag,
+				Branch:  branchFlag,
+				Out:     cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias (default: cwd repo, or the sole registered repo)")
+	cmd.Flags().StringVar(&branchFlag, "branch", "", "branch to export (default: the repo's active branch)")
+	return cmd
+}
