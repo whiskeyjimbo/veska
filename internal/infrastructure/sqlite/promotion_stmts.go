@@ -50,8 +50,8 @@ func (p *promotion) prepareStmts(ctx context.Context) error {
 	}
 	if p.insImports, err = prepare(ctx, p.tx, "file_imports insert", `
 		INSERT INTO file_imports
-			(repo_id, branch, file_path, import_path, alias, language, last_promoted_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+			(repo_id, branch, file_path, import_path, alias, language, last_promoted_at, internal)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(repo_id, branch, file_path, import_path) DO NOTHING`); err != nil {
 		return err
 	}

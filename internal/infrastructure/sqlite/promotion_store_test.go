@@ -150,10 +150,12 @@ func TestPromotionStore_CrossPackageCallsResolution(t *testing.T) {
 	}
 }
 
-// TestPromotionStore_FileImportsExcludeOwnModule pins that a repo's own-module
+// TestPromotionStore_FileImportsFlagOwnModule pins that a repo's own-module
 // imports (which look third-party but live under the repo's module_path) are
-// NOT recorded as dependencies, while genuine external imports are.
-func TestPromotionStore_FileImportsExcludeOwnModule(t *testing.T) {
+// persisted flagged internal=1 - so the package-dependency aggregator can see
+// them - while genuine external imports are stored internal=0 and remain the
+// only entries in the external (deps-list) view.
+func TestPromotionStore_FileImportsFlagOwnModule(t *testing.T) {
 	t.Parallel()
 	db := openTest(t, filepath.Join(t.TempDir(), "v.db"))
 	if _, err := db.Exec(
@@ -171,22 +173,40 @@ func TestPromotionStore_FileImportsExcludeOwnModule(t *testing.T) {
 		Files: []application.PromotionFile{{
 			Path: "/tmp/modbeta/main.go", Nodes: []*domain.Node{n1},
 			Imports: map[string]string{
-				"widget": "example.com/modbeta/widget",  // own module - must be excluded
-				"metric": "example.com/modalpha/metric", // genuine external dep
+				"widget": "example.com/modbeta/widget",  // own module - flagged internal=1
+				"metric": "example.com/modalpha/metric", // genuine external dep - internal=0
 			},
 		}},
 	}); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 
-	var have string
+	flagOf := func(importPath string) int {
+		var v int
+		if err := db.QueryRow(
+			`SELECT internal FROM file_imports WHERE repo_id='repo1' AND branch='main' AND import_path=?`,
+			importPath,
+		).Scan(&v); err != nil {
+			t.Fatalf("scan internal flag for %q: %v", importPath, err)
+		}
+		return v
+	}
+	if got := flagOf("example.com/modbeta/widget"); got != 1 {
+		t.Errorf("own-module import internal flag = %d, want 1", got)
+	}
+	if got := flagOf("example.com/modalpha/metric"); got != 0 {
+		t.Errorf("external import internal flag = %d, want 0", got)
+	}
+
+	// The external (deps-list) view excludes the own-module import.
+	var external string
 	if err := db.QueryRow(
-		`SELECT COALESCE(GROUP_CONCAT(import_path, ','), '') FROM file_imports WHERE repo_id='repo1' AND branch='main'`,
-	).Scan(&have); err != nil {
+		`SELECT COALESCE(GROUP_CONCAT(import_path, ','), '') FROM file_imports WHERE repo_id='repo1' AND branch='main' AND internal=0`,
+	).Scan(&external); err != nil {
 		t.Fatalf("scan: %v", err)
 	}
-	if have != "example.com/modalpha/metric" {
-		t.Errorf("file_imports = %q, want only the external dep (own-module import must be excluded)", have)
+	if external != "example.com/modalpha/metric" {
+		t.Errorf("external view = %q, want only example.com/modalpha/metric", external)
 	}
 }
 

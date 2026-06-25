@@ -306,18 +306,33 @@ func (p *promotion) capturePrevSignatures(ctx context.Context, filePath string) 
 	return prevSig, nil
 }
 
-// syncFileImports synchronizes external import definitions for the promoted file.
+// syncFileImports records the promoted file's package imports. Both external
+// module imports (internal=0, consumed by `veska deps list`) and intra-module
+// imports (internal=1, consumed by the package-dependency aggregator for
+// cycle/layering checks) are persisted; stdlib imports - neither external nor
+// in-module - are skipped as they cannot form repo-internal dependencies.
+// Rows are deleted per file first so a removed import vanishes in the same
+// commit.
 func (p *promotion) syncFileImports(ctx context.Context, file application.PromotionFile) error {
 	if _, err := p.delImports.ExecContext(ctx, p.repoID, p.branch, file.Path); err != nil {
 		return fmt.Errorf("promoter: delete file_imports for %q: %w", file.Path, err)
 	}
 	for alias, importPath := range file.Imports {
-		_, ownModule := modulePackageDir(p.modulePath, importPath)
-		if importPath == "" || !isExternalModulePath(importPath) || ownModule {
+		if importPath == "" {
 			continue
 		}
+		_, ownModule := modulePackageDir(p.modulePath, importPath)
+		internal := 0
+		switch {
+		case ownModule:
+			internal = 1
+		case isExternalModulePath(importPath):
+			internal = 0
+		default:
+			continue // stdlib (or unresolvable): not a repo-internal or module dep
+		}
 		if _, err := p.insImports.ExecContext(ctx,
-			p.repoID, p.branch, file.Path, importPath, alias, "go", p.now,
+			p.repoID, p.branch, file.Path, importPath, alias, "go", p.now, internal,
 		); err != nil {
 			return fmt.Errorf("promoter: insert file_imports for %q (%s): %w", file.Path, importPath, err)
 		}

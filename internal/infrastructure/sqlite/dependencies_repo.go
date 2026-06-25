@@ -19,12 +19,14 @@ func NewDependenciesRepo(readDB *sql.DB) *DependenciesRepo {
 	return &DependenciesRepo{readDB: readDB}
 }
 
-// ListImports returns all file-import associations in (repoID, branch).
+// ListImports returns the EXTERNAL module imports in (repoID, branch).
+// Intra-module (internal=1) rows are excluded: `veska deps list` reports
+// third-party/module dependencies, not in-repo package edges.
 func (r *DependenciesRepo) ListImports(ctx context.Context, repoID, branch string) ([]dependencies.ImportRow, error) {
 	const query = `
 		SELECT file_path, import_path, language
 		FROM file_imports
-		WHERE repo_id = ? AND branch = ?
+		WHERE repo_id = ? AND branch = ? AND internal = 0
 		ORDER BY file_path, import_path`
 
 	rows, err := r.readDB.QueryContext(ctx, query, repoID, branch)
