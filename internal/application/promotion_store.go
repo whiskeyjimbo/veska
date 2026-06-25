@@ -52,6 +52,9 @@ type PromotionFile struct {
 	UnresolvedCalls []domain.UnresolvedCall
 	// Imports maps local packages to import paths for cross-reference.
 	Imports map[string]string
+	// TypeRels lists type relationships (embeds) resolved during promotion into
+	// EMBEDS edges and used for IMPLEMENTS satisfaction.
+	TypeRels []domain.UnresolvedTypeRel
 }
 
 // PromotionBatch holds the metadata and staged files for an atomic promotion,

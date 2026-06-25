@@ -114,6 +114,7 @@ func (s *PromotionStore) Promote(ctx context.Context, batch application.Promotio
 		{"insertParserEdges", p.insertParserEdges},
 		{"resolveIntraPackageCalls", p.resolveIntraPackageCalls},
 		{"resolveCrossPackageCalls", p.resolveCrossPackageCalls},
+		{"resolveTypeRelations", p.resolveTypeRelations},
 		{"advanceRepoSHA", p.advanceRepoSHA},
 	} {
 		phaseStart := time.Now()

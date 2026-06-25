@@ -78,7 +78,14 @@ func parseInterfaceMethods(typeDeclNode *sitter.Node, src []byte, repoID, path, 
 			id := nodeID(repoID, path, domain.KindMethod, fullName)
 			lr := lineRange(c)
 			raw := string(src[c.StartByte():c.EndByte()])
-			n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: fullName, Kind: domain.KindMethod}, domain.WithLanguage("go"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(goExported(methodName)))
+			opts := []domain.NodeOption{domain.WithLanguage("go"), domain.WithLines(lr), domain.WithRawContent(raw), domain.WithExported(goExported(methodName))}
+			// Persist the method signature (name+params+result) so IMPLEMENTS
+			// resolution can match an interface's required set against a concrete
+			// type's methods by signature, not just by name.
+			if sig := extractSignature(c, src); sig != "" {
+				opts = append(opts, domain.WithSignature(sig))
+			}
+			n, err := domain.NewNode(domain.NodeSpec{ID: id, Path: path, Name: fullName, Kind: domain.KindMethod}, opts...)
 			if err != nil {
 				continue
 			}

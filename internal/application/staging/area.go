@@ -29,6 +29,7 @@ type entry struct {
 	edges      []*domain.Edge
 	unresolved []domain.UnresolvedCall
 	imports    map[string]string
+	typeRels   []domain.UnresolvedTypeRel
 }
 
 // Area is a thread-safe, in-memory store of pending (not-yet-promoted)
@@ -91,7 +92,7 @@ func (s *Area) Stage(repoID, branch, filePath string, f File, opts ...Option) bo
 	}
 	k := key{repoID: repoID, branch: branch, filePath: filePath}
 	s.mu.Lock()
-	s.entries[k] = entry{nodes: f.Nodes, edges: f.Edges, unresolved: f.UnresolvedCalls, imports: f.Imports}
+	s.entries[k] = entry{nodes: f.Nodes, edges: f.Edges, unresolved: f.UnresolvedCalls, imports: f.Imports, typeRels: f.TypeRels}
 	s.mu.Unlock()
 	return true
 }
@@ -168,6 +169,7 @@ type File struct {
 	Edges           []*domain.Edge
 	UnresolvedCalls []domain.UnresolvedCall
 	Imports         map[string]string
+	TypeRels        []domain.UnresolvedTypeRel
 }
 
 // Snapshot returns a shallow copy of staged nodes + edges keyed by filePath
@@ -191,7 +193,9 @@ func (s *Area) Snapshot(repoID, branch string) map[string]File {
 			copy(es, e.edges)
 			us := make([]domain.UnresolvedCall, len(e.unresolved))
 			copy(us, e.unresolved)
-			snap[k.filePath] = File{Nodes: ns, Edges: es, UnresolvedCalls: us, Imports: e.imports}
+			trs := make([]domain.UnresolvedTypeRel, len(e.typeRels))
+			copy(trs, e.typeRels)
+			snap[k.filePath] = File{Nodes: ns, Edges: es, UnresolvedCalls: us, Imports: e.imports, TypeRels: trs}
 		}
 	}
 	return snap

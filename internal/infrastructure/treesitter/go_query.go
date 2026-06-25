@@ -156,6 +156,10 @@ func (p *GoParser) ParseFile(ctx context.Context, repoID, path string, src []byt
 						addSymbol(im)
 					}
 				}
+				// Capture embedded types (struct fields / embedded interfaces) so the
+				// promoter can materialize EMBEDS edges and promote methods for
+				// IMPLEMENTS resolution.
+				result.TypeRels = append(result.TypeRels, extractEmbeds(declNode, src, n.ID)...)
 			}
 		case m.node("var.spec") != nil:
 			spec := m.node("var.spec")

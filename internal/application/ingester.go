@@ -116,6 +116,7 @@ func (ing *Ingester) save(ctx context.Context, repoID, branch, path string, src 
 		Edges:           result.Edges,
 		UnresolvedCalls: result.UnresolvedCalls,
 		Imports:         result.Imports,
+		TypeRels:        result.TypeRels,
 	}, staging.WithGenerationGuard(gen, ing.gate))
 	if len(result.Failures) == 0 {
 		// fsnotify file saves clear existing parse-failure findings, whereas cold scan

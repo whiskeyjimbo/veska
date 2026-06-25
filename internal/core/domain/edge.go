@@ -26,17 +26,27 @@ const (
 	// registration call. The cobra command tree uses CONTAINS for subcommand
 	// relationships.
 	EdgeRoutes EdgeKind = "ROUTES"
+	// EdgeImplements connects a concrete type to an interface it satisfies
+	// (Go method-set satisfaction). Resolved at promotion from the parsed
+	// method sets; carries a Confidence reflecting how certain the match is.
+	EdgeImplements EdgeKind = "IMPLEMENTS"
+	// EdgeEmbeds connects a struct or interface to a type it embeds (an
+	// unnamed field / embedded interface). Methods of the embedded type are
+	// promoted onto the embedder, which feeds IMPLEMENTS resolution.
+	EdgeEmbeds EdgeKind = "EMBEDS"
 )
 
 // validEdgeKinds defines the closed set of valid EdgeKind values enforced by NewEdge.
 var validEdgeKinds = map[EdgeKind]struct{}{
-	EdgeCalls:     {},
-	EdgeImports:   {},
-	EdgeContains:  {},
-	EdgeTests:     {},
-	EdgeDependsOn: {},
-	EdgeSimilarTo: {},
-	EdgeRoutes:    {},
+	EdgeCalls:      {},
+	EdgeImports:    {},
+	EdgeContains:   {},
+	EdgeTests:      {},
+	EdgeDependsOn:  {},
+	EdgeSimilarTo:  {},
+	EdgeRoutes:     {},
+	EdgeImplements: {},
+	EdgeEmbeds:     {},
 }
 
 // advisoryEdgeKinds are non-structural edges: they record a suggested or

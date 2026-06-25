@@ -20,6 +20,27 @@ type ParseResult struct {
 	// Imports maps local package identifiers to full import paths (alias -> path),
 	// allowing the promoter to resolve package-qualified unresolved calls.
 	Imports map[string]string
+	// TypeRels contains type-to-type relationships (currently embeds) whose target
+	// type is named but not yet bound to a node ID. The promoter resolves the target
+	// the same way it resolves call targets, then materializes the edge.
+	TypeRels []UnresolvedTypeRel
+}
+
+// UnresolvedTypeRel is a parsed type relationship (e.g. a struct or interface
+// embedding another type) whose target is known by name but not yet bound to a
+// node. SrcID is the embedding type's node; TargetName (+ PkgQualifier for a
+// selector like log.Logger) names the embedded type. The promoter resolves the
+// target across files/packages and emits an edge of Kind.
+type UnresolvedTypeRel struct {
+	SrcID        NodeID
+	TargetName   string
+	PkgQualifier string
+	Kind         EdgeKind
+	// Pointer is true for a pointer embed (`*T`). It does not change which methods
+	// are promoted (both forms promote T's methods) but is recorded for fidelity.
+	Pointer bool
+	// SrcLine is the 1-indexed source line of the embed, attributed to the edge.
+	SrcLine int
 }
 
 // UnresolvedCall represents a call site that could not be bound to a target within the

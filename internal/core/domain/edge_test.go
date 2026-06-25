@@ -104,9 +104,9 @@ func TestNewEdge_WithSourceLine(t *testing.T) {
 }
 
 func TestEdgeKindValues(t *testing.T) {
-	kinds := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo}
-	if len(kinds) != 6 {
-		t.Errorf("expected 6 EdgeKind values, got %d", len(kinds))
+	kinds := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo, EdgeRoutes, EdgeImplements, EdgeEmbeds}
+	if len(kinds) != 9 {
+		t.Errorf("expected 9 EdgeKind values, got %d", len(kinds))
 	}
 }
 
@@ -130,9 +130,9 @@ func TestNewEdge_SimilarToUnresolved(t *testing.T) {
 }
 
 func TestNewEdge_KindValidation(t *testing.T) {
-	valid := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo, EdgeRoutes}
-	if len(valid) != 7 {
-		t.Fatalf("expected 7 valid EdgeKinds, listed %d", len(valid))
+	valid := []EdgeKind{EdgeCalls, EdgeImports, EdgeContains, EdgeTests, EdgeDependsOn, EdgeSimilarTo, EdgeRoutes, EdgeImplements, EdgeEmbeds}
+	if len(valid) != 9 {
+		t.Fatalf("expected 9 valid EdgeKinds, listed %d", len(valid))
 	}
 	for _, k := range valid {
 		t.Run(string(k), func(t *testing.T) {
