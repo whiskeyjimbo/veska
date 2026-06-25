@@ -367,3 +367,31 @@ func (r *GraphRepo) LoadGraph(ctx context.Context, repoID, branch string) (*doma
 
 	return g, nil
 }
+
+// NodeSnippets returns the stored source body for every node in repoID/branch,
+// keyed by node_id. LoadGraph deliberately omits the snippet column (the hot
+// traversal path only needs structure), so the graph-export snapshot fetches
+// the bodies separately to carry node source for the viewer. Nodes with a NULL
+// or empty snippet are omitted from the map.
+func (r *GraphRepo) NodeSnippets(ctx context.Context, repoID, branch string) (map[string]string, error) {
+	rows, err := r.readDB.QueryContext(ctx,
+		`SELECT node_id, snippet FROM nodes
+		 WHERE repo_id = ? AND branch = ? AND snippet IS NOT NULL AND snippet <> ''`,
+		repoID, branch)
+	if err != nil {
+		return nil, fmt.Errorf("graph_repo: load snippets: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]string)
+	for rows.Next() {
+		var id, snippet string
+		if err := rows.Scan(&id, &snippet); err != nil {
+			return nil, fmt.Errorf("graph_repo: scan snippet: %w", err)
+		}
+		out[id] = snippet
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("graph_repo: iterate snippets: %w", err)
+	}
+	return out, nil
+}

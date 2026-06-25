@@ -69,6 +69,7 @@ func newRootCmd(opts ...rootOption) *cobra.Command {
 	root.AddCommand(callsCmd())
 	root.AddCommand(blastCmd())
 	root.AddCommand(changedCmd())
+	root.AddCommand(graphCmd())
 	root.AddCommand(nodeCmd())
 	root.AddCommand(fileNodesCmd())
 	root.AddCommand(similarCmd())

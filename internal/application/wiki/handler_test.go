@@ -56,11 +56,16 @@ func fixtureHandler(t *testing.T, store RenderTimeStore, opts ...HandlerOption) 
 	ep := epFixtureService(t)
 
 	repoRoot := func(_ context.Context, _ string) (string, error) { return root, nil }
-	h, err := NewHandler(hz, ep, store, repoRoot, opts...)
+	h, err := NewHandler(Content{HotZones: hz, EntryPoints: ep, Dependencies: fakeDeps}, store, repoRoot, opts...)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
 	return h, root
+}
+
+// fakeDeps is a no-dependency DependenciesLister for handler tests.
+func fakeDeps(_ context.Context, _, _ string) ([]DependencyRef, error) {
+	return nil, nil
 }
 
 func TestNewHandler_RejectsNilDependencies(t *testing.T) {
@@ -69,16 +74,20 @@ func TestNewHandler_RejectsNilDependencies(t *testing.T) {
 	store := &fakeRenderStore{}
 	rr := func(_ context.Context, _ string) (string, error) { return "/tmp", nil }
 
-	if _, err := NewHandler(nil, ep, store, rr); !errors.Is(err, ErrMissingDependency) {
+	full := Content{HotZones: hz, EntryPoints: ep, Dependencies: fakeDeps}
+	if _, err := NewHandler(Content{EntryPoints: ep, Dependencies: fakeDeps}, store, rr); !errors.Is(err, ErrMissingDependency) {
 		t.Errorf("nil hotZone: want ErrMissingDependency, got %v", err)
 	}
-	if _, err := NewHandler(hz, nil, store, rr); !errors.Is(err, ErrMissingDependency) {
+	if _, err := NewHandler(Content{HotZones: hz, Dependencies: fakeDeps}, store, rr); !errors.Is(err, ErrMissingDependency) {
 		t.Errorf("nil entry: want ErrMissingDependency, got %v", err)
 	}
-	if _, err := NewHandler(hz, ep, nil, rr); !errors.Is(err, ErrMissingDependency) {
+	if _, err := NewHandler(Content{HotZones: hz, EntryPoints: ep}, store, rr); !errors.Is(err, ErrMissingDependency) {
+		t.Errorf("nil deps: want ErrMissingDependency, got %v", err)
+	}
+	if _, err := NewHandler(full, nil, rr); !errors.Is(err, ErrMissingDependency) {
 		t.Errorf("nil store: want ErrMissingDependency, got %v", err)
 	}
-	if _, err := NewHandler(hz, ep, store, nil); !errors.Is(err, ErrMissingDependency) {
+	if _, err := NewHandler(full, store, nil); !errors.Is(err, ErrMissingDependency) {
 		t.Errorf("nil repoRoot: want ErrMissingDependency, got %v", err)
 	}
 }
@@ -109,7 +118,7 @@ func TestHandler_RegeneratesBothPages(t *testing.T) {
 		t.Fatalf("Handle: %v", err)
 	}
 
-	for _, p := range []string{HotZonesPagePath, EntryPointsPagePath} {
+	for _, p := range []string{HotZonesPagePath, EntryPointsPagePath, OnboardingPagePath} {
 		abs := filepath.Join(root, p)
 		if _, err := os.Stat(abs); err != nil {
 			t.Errorf("expected page %s to exist: %v", p, err)

@@ -79,7 +79,7 @@ func Run(ctx context.Context, p Params) error {
 		return fmt.Errorf("wiki: regenerate: %w", err)
 	}
 
-	fmt.Fprintf(p.Out, "wiki regenerated: %s, %s\n", wiki.HotZonesPagePath, wiki.EntryPointsPagePath)
+	fmt.Fprintf(p.Out, "wiki regenerated: %s, %s, %s\n", wiki.HotZonesPagePath, wiki.EntryPointsPagePath, wiki.OnboardingPagePath)
 	return nil
 }
 
@@ -106,8 +106,8 @@ func runAll(ctx context.Context, db *sql.DB, handler *wiki.Handler, out, errOut 
 			failed++
 			continue
 		}
-		fmt.Fprintf(out, "wiki regenerated for %s (%s): %s, %s\n",
-			repocmd.ShortRepoID(rec.RepoID), br, wiki.HotZonesPagePath, wiki.EntryPointsPagePath)
+		fmt.Fprintf(out, "wiki regenerated for %s (%s): %s, %s, %s\n",
+			repocmd.ShortRepoID(rec.RepoID), br, wiki.HotZonesPagePath, wiki.EntryPointsPagePath, wiki.OnboardingPagePath)
 	}
 	if failed > 0 {
 		return fmt.Errorf("wiki: %d of %d repos failed", failed, len(records))

@@ -29,6 +29,12 @@ type RenderTimeStore interface {
 // repoRoot-relative page-path constants into absolute paths.
 type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 
+// DependenciesLister returns the external dependencies for the onboarding page,
+// already projected to the wiki-owned DependencyRef so the handler stays
+// decoupled from the dependencies service DTO. The composition root adapts the
+// dependencies.Service.List result into this shape.
+type DependenciesLister func(ctx context.Context, repoID, branch string) ([]DependencyRef, error)
+
 // Handler implements ports.WorkHandler for WorkKindWiki rows. On each row it
 // regenerates BOTH the hot_zone and entry_points Markdown pages and, only on
 // full success, stamps the last-render time.
@@ -41,6 +47,7 @@ type RepoRootFunc func(ctx context.Context, repoID string) (string, error)
 type Handler struct {
 	hotZone    *HotZoneService
 	entry      *EntryPointsService
+	deps       DependenciesLister
 	store      RenderTimeStore
 	repoRoot   RepoRootFunc
 	clock      func() time.Time
@@ -70,15 +77,28 @@ func WithWritePages(enabled bool) HandlerOption {
 	}
 }
 
-// NewHandler constructs a wiki Handler. hotZone, entry, store and repoRoot
-// are all required; a nil dependency yields an error wrapping
+// Content bundles the three page-content sources the Handler renders from:
+// the hot-zone ranking service, the entry-point selection service, and the
+// dependency lister. Grouping them keeps NewHandler's signature small and
+// makes the "these produce what the pages show" relationship explicit.
+type Content struct {
+	HotZones     *HotZoneService
+	EntryPoints  *EntryPointsService
+	Dependencies DependenciesLister
+}
+
+// NewHandler constructs a wiki Handler. Every content source plus store and
+// repoRoot is required; a nil dependency yields an error wrapping
 // ErrMissingDependency and a nil *Handler.
-func NewHandler(hotZone *HotZoneService, entry *EntryPointsService, store RenderTimeStore, repoRoot RepoRootFunc, opts ...HandlerOption) (*Handler, error) {
-	if hotZone == nil {
+func NewHandler(content Content, store RenderTimeStore, repoRoot RepoRootFunc, opts ...HandlerOption) (*Handler, error) {
+	if content.HotZones == nil {
 		return nil, fmt.Errorf("wiki.NewHandler: hotZone is nil: %w", ErrMissingDependency)
 	}
-	if entry == nil {
+	if content.EntryPoints == nil {
 		return nil, fmt.Errorf("wiki.NewHandler: entry is nil: %w", ErrMissingDependency)
+	}
+	if content.Dependencies == nil {
+		return nil, fmt.Errorf("wiki.NewHandler: deps is nil: %w", ErrMissingDependency)
 	}
 	if store == nil {
 		return nil, fmt.Errorf("wiki.NewHandler: store is nil: %w", ErrMissingDependency)
@@ -87,8 +107,9 @@ func NewHandler(hotZone *HotZoneService, entry *EntryPointsService, store Render
 		return nil, fmt.Errorf("wiki.NewHandler: repoRoot is nil: %w", ErrMissingDependency)
 	}
 	h := &Handler{
-		hotZone:  hotZone,
-		entry:    entry,
+		hotZone:  content.HotZones,
+		entry:    content.EntryPoints,
+		deps:     content.Dependencies,
 		store:    store,
 		repoRoot: repoRoot,
 		clock:    time.Now,
@@ -125,6 +146,10 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 	if err != nil {
 		return fmt.Errorf("wiki.Handle: select entry points: %w", err)
 	}
+	deps, err := h.deps(ctx, row.RepoID, row.Branch)
+	if err != nil {
+		return fmt.Errorf("wiki.Handle: list dependencies: %w", err)
+	}
 
 	// stamp GeneratedAt so a Markdown page on disk never
 	// hides how old it is. The render-time stamp lands in the document
@@ -139,11 +164,16 @@ func (h *Handler) Handle(ctx context.Context, row ports.WorkRow) error {
 		// so the docs stay portable across machines and contributors.
 		// The MCP tool responses still canonicalize to absolute (see
 		// tools_wiki.go).
-		if err := writePage(filepath.Join(root, HotZonesPagePath), RenderHotZones(relativizeHotZoneReport(report, root))); err != nil {
+		relHot := relativizeHotZoneReport(report, root)
+		relEp := relativizeEntryPointsReport(epReport, root)
+		if err := writePage(filepath.Join(root, HotZonesPagePath), RenderHotZones(relHot)); err != nil {
 			return fmt.Errorf("wiki.Handle: write hot zones page: %w", err)
 		}
-		if err := writePage(filepath.Join(root, EntryPointsPagePath), RenderEntryPoints(relativizeEntryPointsReport(epReport, root))); err != nil {
+		if err := writePage(filepath.Join(root, EntryPointsPagePath), RenderEntryPoints(relEp)); err != nil {
 			return fmt.Errorf("wiki.Handle: write entry points page: %w", err)
+		}
+		if err := writePage(filepath.Join(root, OnboardingPagePath), RenderOnboarding(relEp, relHot, deps)); err != nil {
+			return fmt.Errorf("wiki.Handle: write onboarding page: %w", err)
 		}
 	}
 	// When writePages is false the report is still ranked and the
@@ -171,7 +201,7 @@ func relativizeHotZoneReport(r Report, root string) Report {
 	out := r
 	out.Zones = make([]HotZone, len(r.Zones))
 	for i, z := range r.Zones {
-		z.FilePath = relPath(root, z.FilePath)
+		z.FilePath = RelPath(root, z.FilePath)
 		out.Zones[i] = z
 	}
 	return out
@@ -183,13 +213,18 @@ func relativizeEntryPointsReport(r EntryPointsReport, root string) EntryPointsRe
 	out := r
 	out.EntryPoints = make([]EntryPoint, len(r.EntryPoints))
 	for i, e := range r.EntryPoints {
-		e.FilePath = relPath(root, e.FilePath)
+		e.FilePath = RelPath(root, e.FilePath)
 		out.EntryPoints[i] = e
 	}
 	return out
 }
 
-func relPath(root, p string) string {
+// RelPath rewrites an absolute path to a repoRoot-relative slash-form path
+// when possible, returning the input unchanged for relative paths or on
+// error. Exported so the graph-export snapshot can relativize node, hot-zone,
+// and entry-point paths through the same helper the wiki pages use (AC2: no
+// home/username leakage).
+func RelPath(root, p string) string {
 	if root == "" || !filepath.IsAbs(p) {
 		return p
 	}
