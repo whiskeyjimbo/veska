@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strings"
 )
 
 // PackageDepsRepo aggregates the per-file internal import rows in file_imports
@@ -79,6 +80,14 @@ func (r *PackageDepsRepo) PackageDependencies(ctx context.Context, repoID, branc
 func aggregatePackageDeps(imports []pkgImportRow, modulePath string) map[string][]string {
 	sets := make(map[string]map[string]struct{})
 	for _, ir := range imports {
+		// Test files are excluded: Go keeps _test.go imports out of the
+		// build-time package import graph, so a "cycle" that only closes
+		// through test imports (e.g. embedder_test.go -> sqlite, while sqlite
+		// -> application in prod) compiles fine and is not a real import cycle.
+		// Including them produces false-positive cycle findings.
+		if isGoTestFile(ir.filePath) {
+			continue
+		}
 		src := pkgDir(ir.filePath)
 		dst, ok := modulePackageDir(modulePath, ir.importPath)
 		if !ok || src == dst {
@@ -99,6 +108,12 @@ func aggregatePackageDeps(imports []pkgImportRow, modulePath string) map[string]
 		out[src] = dsts
 	}
 	return out
+}
+
+// isGoTestFile reports whether a path is a Go test file, whose imports Go
+// excludes from the build-time package dependency graph.
+func isGoTestFile(filePath string) bool {
+	return strings.HasSuffix(filePath, "_test.go")
 }
 
 // pkgDir returns the module-relative package directory of a repo-relative file

@@ -20,6 +20,9 @@ func TestAggregatePackageDeps(t *testing.T) {
 		{filePath: "c/c1.go", importPath: "example.com/app/c"},
 		// a non-module path that slipped in is ignored (defensive).
 		{filePath: "a/a1.go", importPath: "github.com/x/y"},
+		// test-file imports are excluded: Go keeps them out of the build import
+		// graph, so this c->a edge must NOT create an a<->c cycle.
+		{filePath: "c/c_test.go", importPath: "example.com/app/a"},
 	}
 	got := aggregatePackageDeps(imports, mod)
 	want := map[string][]string{
