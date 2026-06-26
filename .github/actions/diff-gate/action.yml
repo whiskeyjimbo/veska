@@ -1,0 +1,96 @@
+# Veska diff-gate - composite GitHub Action (v0, VALIDATION PENDING)
+#
+# Runs the merge-time diff gates (api / security / cycles / clones / untested)
+# on a pull request and fails the check if any blocking gate fails. Catches
+# COMPILE-GREEN regressions the normal merge bar misses: breaking exported-API
+# changes, leaked secrets, new dependency cycles, reintroduced duplicates, and
+# changed prod symbols with no test.
+#
+# STATUS: v0 scaffolding. The command sequence is grounded in the real CLI
+# (make build-small; veska reindex's standalone direct-sqlite cold-scan;
+# diff-gate's --branch now auto-resolving to the active branch) but has NOT yet
+# been validated in a live CI run. Do not wire a live workflow against it until
+# the validation pass (see README) is green.
+#
+# v0 limitation: indexes the repo from scratch every run (no base-graph cache /
+# no-embed fast path yet - those are i0tx.3.1 / i0tx.10). Fine for small/medium
+# repos; slow on large ones until the cache lands.
+
+name: "Veska diff-gate"
+description: "Merge-time graph-aware diff gates: api / secrets / cycles / clones / untested"
+inputs:
+  gates:
+    description: "Space-separated blocking gates to run."
+    required: false
+    default: "api security cycles clones untested"
+  go-version:
+    description: "Go toolchain version (cgo is required: tree-sitter + sqlite_fts5)."
+    required: false
+    default: "1.26"
+  base-sha:
+    description: "Base commit to diff against (defaults to the PR base)."
+    required: false
+    default: ${{ github.event.pull_request.base.sha }}
+  head-sha:
+    description: "Candidate commit (defaults to the PR head)."
+    required: false
+    default: ${{ github.sha }}
+outputs:
+  failed-gates:
+    description: "Space-separated gates that FAILED (empty on full pass)."
+    value: ${{ steps.run.outputs.failed }}
+runs:
+  using: "composite"
+  steps:
+    # Need both endpoint trees, NOT full history. A two-dot diff (base..head)
+    # only needs the two commits; full clone is only for three-dot/merge-base.
+    - name: Fetch base + head trees
+      shell: bash
+      run: git fetch --no-tags --depth=1 origin ${{ inputs.base-sha }} ${{ inputs.head-sha }}
+
+    - uses: actions/setup-go@v6
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache: true
+
+    - name: Build veska (thin, cgo)
+      shell: bash
+      run: make build-small
+
+    # Index the BASE state so the gate's indexed-HEAD graph == the base. The
+    # candidate diff (head) is read from git via --repo-root at gate time.
+    # reindex uses the standalone direct-sqlite cold-scan (no daemon needed).
+    - name: Index base graph
+      shell: bash
+      run: |
+        git checkout --quiet ${{ inputs.base-sha }}
+        ./bin/veska repo add . >/dev/null 2>&1 || true
+        ./bin/veska reindex
+        echo "VESKA_REPO_ID=$(./bin/veska repo list | awk 'NR==2{print $1}')" >> "$GITHUB_ENV"
+
+    - name: Run gates
+      id: run
+      shell: bash
+      run: |
+        set -u
+        failed=""
+        for g in ${{ inputs.gates }}; do
+          echo "::group::diff-gate $g"
+          if ./bin/veska diff-gate "$g" \
+               --repo "$VESKA_REPO_ID" \
+               --base-ref ${{ inputs.base-sha }} \
+               --candidate-ref ${{ inputs.head-sha }} \
+               --repo-root . ; then
+            echo "PASS: $g"
+          else
+            echo "FAIL: $g"
+            failed="$failed $g"
+          fi
+          echo "::endgroup::"
+        done
+        echo "failed=$(echo $failed | xargs)" >> "$GITHUB_OUTPUT"
+        if [ -n "$failed" ]; then
+          echo "::error::diff-gate FAILED:$failed"
+          exit 1
+        fi
+        echo "diff-gate: all gates passed"
