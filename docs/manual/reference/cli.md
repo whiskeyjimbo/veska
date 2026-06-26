@@ -149,7 +149,7 @@ veska changed [ref-a [ref-b]] [flags]
 
 ### `veska clones`
 
-Find duplicate code: exact byte-identical clones, or --near fuzzy clusters (wraps eng_find_clones)
+Find duplicate code: exact byte-identical clones, or --near fuzzy clusters (wraps eng_find_duplicates seed=clones)
 
 Default: list groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), via content_hash equality - deterministic, no embeddings. With --near: cluster symbols whose persisted SIMILAR_TO similarity exceeds a threshold above auto-link's 'related' cutoff (fuzzy near-duplicates - renamed copies, drifted variants), reading scores auto-link already stored. For 'what else looks like this ONE symbol?', use `veska similar <symbol>`. Note: --near needs SIMILAR_TO edges carrying scores; reindex a repo promoted before scoring landed.
 
@@ -161,7 +161,7 @@ veska clones [flags]
 
 ```
       --branch string     branch (default: repo's active branch)
-      --json              emit JSON (eng_find_clones shape)
+      --json              emit JSON (eng_find_duplicates shape)
       --min-score float   with --near: minimum similarity score (0 = default calibrated for the elected embedder; lower for more recall)
       --near              fuzzy near-duplicate clusters from SIMILAR_TO edges (default: exact clones)
       --repo string       repo id, short_id, or alias
@@ -910,7 +910,7 @@ veska doctor wiki_render [flags]
 
 ### `veska duplicates`
 
-Whole-repo (or cross-repo) similar-code clusters for de-dupe triage (wraps eng_find_clusters)
+Whole-repo (or cross-repo) similar-code clusters for de-dupe triage (wraps eng_find_duplicates seed=clusters)
 
 List groups of >=2 similar symbols in one ranked pass across three tiers (tightest first): 'exact' (byte-identical copy-paste), 'structural' (same shape after renaming variables/literals - Type-2 clones), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed - point it at a repo (or --all-repos) and turn each cluster into a verify-and-dedupe task. Note: structural/near need structural_hash + scored SIMILAR_TO edges; reindex a graph promoted before they landed.
 
@@ -923,7 +923,7 @@ veska duplicates [flags]
 ```
       --all-repos         cluster across every registered repo (cross-repo; exact+structural only)
       --branch string     branch (default: repo's active branch, or 'main' with --all-repos)
-      --json              emit JSON (eng_find_clusters shape)
+      --json              emit JSON (eng_find_duplicates shape)
       --min-score float   near tier: minimum similarity score (0 = calibrated default; lower for more recall)
       --path string       restrict to nodes whose file_path starts with this prefix
       --repo string       repo id, short_id, or alias (ignored with --all-repos)
@@ -1285,7 +1285,7 @@ veska reindex [<repo-id-or-path>] [flags]
 
 ### `veska related`
 
-Find symbols similar to the code at a file:line (wraps eng_find_related)
+Find symbols similar to the code at a file:line (wraps eng_find_duplicates seed=related)
 
 Find symbols semantically similar to the code at a (file, line) anchor - a moat-pivot from a search hit, error trace, or editor cursor. Line is 1-indexed.
 
@@ -1296,7 +1296,7 @@ veska related <file:line> [flags]
 **Flags:**
 
 ```
-      --json          emit JSON (eng_find_related shape)
+      --json          emit JSON (eng_find_duplicates shape)
       --k int         neighbor count (0 = daemon default of 10)
       --repo string   repo id, short_id, or alias
 ```
@@ -1608,7 +1608,7 @@ veska service uninstall [flags]
 
 ### `veska similar`
 
-Find symbols nearest to a seed in vector space (wraps eng_search_similar)
+Find symbols nearest to a seed in vector space (wraps eng_find_duplicates seed=similar)
 
 Vector-nearest-neighbor search seeded by an existing symbol or node_id - 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.
 
@@ -1619,7 +1619,7 @@ veska similar <symbol-or-node-id> [flags]
 **Flags:**
 
 ```
-      --json          emit JSON (eng_search_similar shape)
+      --json          emit JSON (eng_find_duplicates shape)
       --k int         neighbor count (0 = daemon default of 10)
       --repo string   repo id, short_id, or alias
 ```

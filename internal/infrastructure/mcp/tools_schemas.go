@@ -279,19 +279,30 @@ var searchSemanticInputSchema = json.RawMessage(`{
   "required": ["query"]
 }`)
 
-var searchSimilarInputSchema = json.RawMessage(`{
+// findDuplicatesInputSchema is the union schema for the merged
+// eng_find_duplicates tool. 'seed' selects the strategy; the params for the
+// other seeds are silently ignored by the active sub-handler, which validates
+// its own required inputs (e.g. seed=related needs file_path+line).
+var findDuplicatesInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "k-nearest-neighbor vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected)",
   "properties": {
-    "node_id": {"type": "string"},
-    "symbol":  {"type": "string", "description": "Alias for node_id by symbol name (resolved like eng_find_symbol). Ambiguity is rejected."},
-    "repo_id": {"type": "string"},
-    "branch":  {"type": "string"},
-    "k":       {"type": "integer", "minimum": 1, "description": "Neighbor count (default 10). 'limit' is accepted as an alias."},
-    "limit":   {"type": "integer", "minimum": 1, "description": "Alias for k."},
-    "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
+    "seed":      {"type": "string", "enum": ["clusters", "clones", "similar", "related"], "description": "Strategy: 'clusters' (default) whole-repo tiered clusters; 'clones' whole-repo single-mode groups; 'similar' neighbors of one node_id/symbol; 'related' neighbors of a (file_path, line)."},
+    "mode":      {"type": "string", "enum": ["exact", "near"], "description": "seed=clones only: exact (default, byte-identical via content_hash) or near (thresholded SIMILAR_TO clusters)."},
+    "scope":     {"type": "string", "enum": ["repo", "all"], "description": "seed=clusters only: repo (default) or all (cross-repo; exact+structural only)."},
+    "tiers":     {"type": "string", "description": "seed=clusters only: comma-separated subset of exact,structural,near. Omit for all tiers."},
+    "min_score": {"type": "number", "description": "seed=clones (near) / seed=clusters (near tier): minimum SIMILAR_TO score. Omit for the elected embedder's calibrated default."},
+    "path":      {"type": "string", "description": "seed=clusters only: restrict to nodes whose file_path starts with this prefix."},
+    "node_id":   {"type": "string", "description": "seed=similar: node to seed the neighbor search from."},
+    "symbol":    {"type": "string", "description": "seed=similar: symbol name (resolved like eng_find_symbol; ambiguity rejected)."},
+    "file_path": {"type": "string", "description": "seed=related: file containing the cursor."},
+    "line":      {"type": "integer", "minimum": 1, "description": "seed=related: 1-indexed line; the enclosing node's embedding is the seed."},
+    "repo_id":   {"type": "string"},
+    "branch":    {"type": "string"},
+    "k":         {"type": "integer", "minimum": 1, "description": "seed=similar/related: neighbor count (default 10). 'limit' is an alias."},
+    "limit":     {"type": "integer", "minimum": 1, "description": "seed=similar/related: alias for k. seed=clones/clusters: max groups/clusters (default 100)."},
+    "cwd":       {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
 }`)
 

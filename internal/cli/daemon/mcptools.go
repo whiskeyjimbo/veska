@@ -288,12 +288,13 @@ func (w *mcpToolWiring) registerSearchTool() error {
 	return nil
 }
 
-// registerCloneTool registers eng_find_clones: exact-clone detection
-// by content_hash equality (mode=exact) plus near-duplicate clustering over
-// thresholded SIMILAR_TO edges (mode=near). One CloneRepo
-// satisfies both the CloneStore and NearStore ports. If construction fails
-// (only a nil store, which cannot happen here) the tool is skipped rather than
-// aborting daemon startup.
+// registerCloneTool registers eng_find_duplicates, the merged dedup tool. Its
+// seed param selects the former four tools' strategies: clones (exact via
+// content_hash / near via thresholded SIMILAR_TO), clusters (whole-repo tiered),
+// similar (one symbol's neighbors), related ((file_path, line) neighbors). One
+// CloneRepo satisfies both the CloneStore and NearStore ports. If finder
+// construction fails (only a nil store, which cannot happen here) the tool is
+// skipped rather than aborting daemon startup.
 func (w *mcpToolWiring) registerCloneTool() {
 	repo := sqlite.NewCloneRepo(w.pools.ReadDB)
 	// The elected embedder's ModelID selects the calibrated near-dup default
@@ -306,7 +307,7 @@ func (w *mcpToolWiring) registerCloneTool() {
 	if err != nil {
 		return
 	}
-	mcp.RegisterCloneTools(w.r, finder, w.repos())
+	mcp.RegisterDuplicatesTool(w.r, finder, w.d.refs, w.d.vectors, w.nodes, w.repos(), w.graph)
 }
 
 // registerDependenciesTool registers eng_list_dependencies, which

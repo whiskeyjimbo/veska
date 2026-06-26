@@ -79,14 +79,12 @@ func TestFindClones_NotTruncatedWhenUnderCap(t *testing.T) {
 	}
 }
 
-// dispatchClusters dispatches eng_find_clusters and decodes the response.
+// dispatchClusters dispatches eng_find_duplicates seed=clusters and decodes the response.
 func dispatchClusters(t *testing.T, finder CloneFinder, params map[string]any) FindClustersResponse {
 	t.Helper()
 	repos := &stubRepoLister{repos: []application.RepoRecord{{RepoID: "r1", ActiveBranch: "main"}}}
-	r := NewRegistry()
-	RegisterCloneTools(r, finder, repos)
-	raw, _ := json.Marshal(params)
-	req := &Request{Method: "eng_find_clusters", Params: json.RawMessage(raw)}
+	r := registerDupesForTest(finder, repos)
+	req := dupRequest(t, "clusters", params)
 	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
 	if rpcErr != nil {
 		t.Fatalf("dispatch: %+v", rpcErr)

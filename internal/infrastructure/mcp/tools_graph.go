@@ -151,7 +151,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 	resolve := cfg.resolve
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_symbol",
-		Description:     "Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). " + DescFindSymbolMatching + " Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries - it's deterministic and exact.",
+		Description:     "Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). " + DescFindSymbolMatching + " Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_find_duplicates without another lookup. Prefer this over eng_search_semantic for known-identifier queries - it's deterministic and exact.",
 		IncludesStaging: true,
 		Tier:            Tier1,
 		InputSchema:     findSymbolInputSchema,

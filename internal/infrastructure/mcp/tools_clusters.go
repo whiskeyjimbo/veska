@@ -13,25 +13,6 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/core/domain"
 )
 
-const DescFindClusters = "Whole-repo (or cross-repo) similar-code clusters for de-dupe triage. One pass returns groups of >=2 symbols at three tiers, ranked tightest first: 'exact' (byte-identical copy-paste, content_hash), 'structural' (same shape after renaming variables/literals - Type-2 clones, structural_hash), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed. scope='all' clusters across EVERY registered repo (exact+structural only - cross-repo near is not yet computed); 'path' narrows to a file_path prefix; 'tiers' selects a subset. Container kinds (package/chunk/file/module/field/import) are excluded. Each cluster's members carry repo_id/file/line so you can open a verify-and-dedupe task per grouping. NOTE: structural/near need structural_hash + scored SIMILAR_TO edges, populated by a promotion/reindex on a current build - reindex older graphs first."
-
-var findClustersInputSchema = []byte(`{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Unified similar-code clusters (exact + structural + near), ranked, for de-dupe task creation. No seed required.",
-  "properties": {
-    "repo_id":   {"type": "string", "description": "Repo to scan (scope=repo). Resolved from cwd when omitted."},
-    "branch":    {"type": "string", "description": "Branch to scan. Defaults to the repo's active branch (scope=repo) or 'main' (scope=all)."},
-    "scope":     {"type": "string", "enum": ["repo", "all"], "description": "repo (default): one repo. all: cluster across every registered repo (cross-repo; exact+structural only)."},
-    "tiers":     {"type": "string", "description": "Comma-separated subset of exact,structural,near. Omit for all tiers."},
-    "min_score": {"type": "number", "description": "near tier only: minimum SIMILAR_TO score. Omit for the elected embedder's calibrated default; lower for more recall."},
-    "path":      {"type": "string", "description": "Restrict to nodes whose file_path starts with this prefix (e.g. internal/infrastructure/mcp)."},
-    "limit":     {"type": "integer", "minimum": 1, "description": "Max clusters to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."},
-    "cwd":       {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted (scope=repo)."}
-  }
-}`)
-
 type findClustersParams struct {
 	RepoID   string  `json:"repo_id"`
 	Branch   string  `json:"branch"`

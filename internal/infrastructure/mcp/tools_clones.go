@@ -18,23 +18,6 @@ type CloneFinder interface {
 	Clusters(ctx context.Context, opts duplicates.ClusterOptions) ([]duplicates.Cluster, error)
 }
 
-const DescFindClones = "Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), detected by content_hash equality - deterministic, no embeddings. mode='near': clusters of symbols whose persisted SIMILAR_TO similarity exceeds a threshold higher than auto-link's 'related' cutoff (fuzzy near-duplicates - renamed copies, drifted variants); reads scores auto-link already stored, runs no new similarity sweep. For 'what else looks LIKE this ONE symbol?' use eng_search_similar instead. Container/sub-symbol kinds (package, chunk, file, module, field, import) are excluded so boilerplate doesn't flood results. NOTE: near mode needs SIMILAR_TO edges carrying a score, which only exist after a promotion/reindex on a build with the score column - older indexes report no near clusters until reindexed."
-
-var findClonesInputSchema = []byte(`{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Find duplicate code in a repo/branch. mode=exact returns 'groups' (byte-identical via content_hash); mode=near returns 'clusters' (fuzzy, thresholded SIMILAR_TO edges).",
-  "properties": {
-    "repo_id":   {"type": "string", "description": "Repo to scan. Resolved from cwd when omitted."},
-    "branch":    {"type": "string", "description": "Branch to scan. Defaults to the repo's active branch."},
-    "mode":      {"type": "string", "enum": ["exact", "near"], "description": "exact (default): byte-identical clones via content_hash, populates 'groups'. near: fuzzy clusters from thresholded SIMILAR_TO edges, populates 'clusters'."},
-    "min_score": {"type": "number", "description": "near mode only: minimum SIMILAR_TO edge score (higher = more similar). Omit to use the default calibrated for the elected embedder (model spaces differ; near-dup and 'related' bands overlap, so this is a high-precision/partial-recall knob). Lower it for more recall."},
-    "limit":     {"type": "integer", "minimum": 1, "description": "Max groups/clusters to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."},
-    "cwd":       {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
-  }
-}`)
-
 type findClonesParams struct {
 	RepoID   string  `json:"repo_id"`
 	Branch   string  `json:"branch"`
@@ -75,22 +58,10 @@ type FindClonesResponse struct {
 	Truncated bool             `json:"truncated"`
 }
 
-func RegisterCloneTools(r *Registry, finder CloneFinder, repos application.RepoLister) {
-	r.MustRegister(ToolSpec{
-		Name:            "eng_find_clones",
-		Description:     DescFindClones,
-		IncludesStaging: false,
-		InputSchema:     findClonesInputSchema,
-		Handler:         makeFindClonesHandler(finder, repos),
-	})
-	r.MustRegister(ToolSpec{
-		Name:            "eng_find_clusters",
-		Description:     DescFindClusters,
-		IncludesStaging: false,
-		InputSchema:     findClustersInputSchema,
-		Handler:         makeFindClustersHandler(finder, repos),
-	})
-}
+// eng_find_clones and eng_find_clusters are no longer registered as standalone
+// tools - they merged into eng_find_duplicates (seed=clones / seed=clusters),
+// registered by RegisterDuplicatesTool, which reuses makeFindClonesHandler /
+// makeFindClustersHandler below.
 
 func makeFindClonesHandler(finder CloneFinder, repos application.RepoLister) ToolHandler {
 	return func(ctx context.Context, _ domain.Actor, raw json.RawMessage) (any, *RPCError) {

@@ -8,10 +8,10 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/clonescmd"
 )
 
-// clonesCmd wraps eng_find_clones. Exact-clone detection by
+// clonesCmd wraps eng_find_duplicates seed=clones. Exact-clone detection by
 // content_hash equality - the deterministic, embedding-free half of duplicate
 // detection. For the per-function "is THIS duplicated?" pivot, reach for
-// `veska similar <symbol>` (eng_search_similar) instead.
+// `veska similar <symbol>` (eng_find_duplicates seed=similar) instead.
 func clonesCmd() *cobra.Command {
 	var (
 		repoFlag   string
@@ -22,7 +22,7 @@ func clonesCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:          "clones",
-		Short:        "Find duplicate code: exact byte-identical clones, or --near fuzzy clusters (wraps eng_find_clones)",
+		Short:        "Find duplicate code: exact byte-identical clones, or --near fuzzy clusters (wraps eng_find_duplicates seed=clones)",
 		Long:         "Default: list groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), via content_hash equality - deterministic, no embeddings. With --near: cluster symbols whose persisted SIMILAR_TO similarity exceeds a threshold above auto-link's 'related' cutoff (fuzzy near-duplicates - renamed copies, drifted variants), reading scores auto-link already stored. For 'what else looks like this ONE symbol?', use `veska similar <symbol>`. Note: --near needs SIMILAR_TO edges carrying scores; reindex a repo promoted before scoring landed.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -41,6 +41,6 @@ func clonesCmd() *cobra.Command {
 	cmd.Flags().StringVar(&branchFlag, "branch", "", "branch (default: repo's active branch)")
 	cmd.Flags().BoolVar(&nearFlag, "near", false, "fuzzy near-duplicate clusters from SIMILAR_TO edges (default: exact clones)")
 	cmd.Flags().Float64Var(&minScore, "min-score", 0, "with --near: minimum similarity score (0 = default calibrated for the elected embedder; lower for more recall)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_clones shape)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_duplicates shape)")
 	return cmd
 }

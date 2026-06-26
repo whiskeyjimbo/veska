@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package duplicatescmd holds the delivery-layer logic behind `veska duplicates`
-// (eng_find_clusters): the unified, tier-labeled similar-code view (exact +
+// (eng_find_duplicates seed=clusters): the unified, tier-labeled similar-code view (exact +
 // structural + near) for de-dupe triage. It proxies to the daemon like the other
 // read commands and renders one block per cluster, grouped tightest tier first.
 package duplicatescmd
@@ -49,10 +49,10 @@ type Params struct {
 	Out      io.Writer
 }
 
-// Run wraps eng_find_clusters: ranked exact/structural/near clusters over one
-// repo, or across all registered repos with AllRepos.
+// Run wraps eng_find_duplicates seed=clusters: ranked exact/structural/near
+// clusters over one repo, or across all registered repos with AllRepos.
 func Run(ctx context.Context, p Params) error {
-	params := map[string]any{}
+	params := map[string]any{"seed": "clusters"}
 	if p.AllRepos {
 		params["scope"] = "all"
 	} else if p.RepoID != "" {
@@ -72,7 +72,7 @@ func Run(ctx context.Context, p Params) error {
 	}
 
 	var raw json.RawMessage
-	if err := mcpclient.Call(ctx, "eng_find_clusters", params, &raw); err != nil {
+	if err := mcpclient.Call(ctx, "eng_find_duplicates", params, &raw); err != nil {
 		return fmt.Errorf("duplicates: %w", err)
 	}
 	if p.JSONOut {

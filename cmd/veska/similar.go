@@ -12,7 +12,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/similarcmd"
 )
 
-// similarCmd wraps eng_search_similar. parity wrapper. The
+// similarCmd wraps eng_find_duplicates seed=similar. parity wrapper. The
 // selector is a symbol name or node_id, routed the same way `veska calls`/
 // `veska blast` route theirs.
 func similarCmd() *cobra.Command {
@@ -23,7 +23,7 @@ func similarCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:          "similar <symbol-or-node-id>",
-		Short:        "Find symbols nearest to a seed in vector space (wraps eng_search_similar)",
+		Short:        "Find symbols nearest to a seed in vector space (wraps eng_find_duplicates seed=similar)",
 		Long:         "Vector-nearest-neighbor search seeded by an existing symbol or node_id - 'what else looks like this?'. Use to find variants, near-duplicates, or refactor targets. The seed itself is excluded from results.",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
@@ -39,11 +39,11 @@ func similarCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias")
 	cmd.Flags().IntVar(&k, "k", 0, "neighbor count (0 = daemon default of 10)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_search_similar shape)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_duplicates shape)")
 	return cmd
 }
 
-// relatedCmd wraps eng_find_related. parity wrapper. The anchor is
+// relatedCmd wraps eng_find_duplicates seed=related. parity wrapper. The anchor is
 // a file:line; the daemon resolves the smallest enclosing node and runs the
 // same neighborhood search as `veska similar`.
 func relatedCmd() *cobra.Command {
@@ -54,7 +54,7 @@ func relatedCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:          "related <file:line>",
-		Short:        "Find symbols similar to the code at a file:line (wraps eng_find_related)",
+		Short:        "Find symbols similar to the code at a file:line (wraps eng_find_duplicates seed=related)",
 		Long:         "Find symbols semantically similar to the code at a (file, line) anchor - a moat-pivot from a search hit, error trace, or editor cursor. Line is 1-indexed.",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
@@ -75,7 +75,7 @@ func relatedCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id, short_id, or alias")
 	cmd.Flags().IntVar(&k, "k", 0, "neighbor count (0 = daemon default of 10)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_related shape)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_duplicates shape)")
 	return cmd
 }
 

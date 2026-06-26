@@ -8,7 +8,7 @@ import (
 	"github.com/whiskeyjimbo/veska/internal/cli/duplicatescmd"
 )
 
-// duplicatesCmd wraps eng_find_clusters: the unified, tier-labeled
+// duplicatesCmd wraps eng_find_duplicates seed=clusters: the unified, tier-labeled
 // similar-code view for de-dupe triage - exact (byte-identical), structural
 // (renamed Type-2), and near (vector) clusters in one ranked pass, repo-wide or
 // across all registered repos. Each grouping is shaped to become a verify-and
@@ -26,7 +26,7 @@ func duplicatesCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:          "duplicates",
-		Short:        "Whole-repo (or cross-repo) similar-code clusters for de-dupe triage (wraps eng_find_clusters)",
+		Short:        "Whole-repo (or cross-repo) similar-code clusters for de-dupe triage (wraps eng_find_duplicates seed=clusters)",
 		Long:         "List groups of >=2 similar symbols in one ranked pass across three tiers (tightest first): 'exact' (byte-identical copy-paste), 'structural' (same shape after renaming variables/literals - Type-2 clones), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed - point it at a repo (or --all-repos) and turn each cluster into a verify-and-dedupe task. Note: structural/near need structural_hash + scored SIMILAR_TO edges; reindex a graph promoted before they landed.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -49,6 +49,6 @@ func duplicatesCmd() *cobra.Command {
 	cmd.Flags().StringVar(&tiers, "tiers", "", "comma-separated subset of exact,structural,near (default: all)")
 	cmd.Flags().StringVar(&path, "path", "", "restrict to nodes whose file_path starts with this prefix")
 	cmd.Flags().Float64Var(&minScore, "min-score", 0, "near tier: minimum similarity score (0 = calibrated default; lower for more recall)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_clusters shape)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_find_duplicates shape)")
 	return cmd
 }

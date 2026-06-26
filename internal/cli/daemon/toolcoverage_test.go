@@ -1156,52 +1156,53 @@ func graphFamily() []coverageTool {
 				t.Errorf("non-chunk node set = %v, want %v", nonChunk, want)
 			}
 		}},
-		{family: f, tool: "eng_find_related", bead: "solov2-d217", run: func(t *testing.T) {
-			h := newHarness(t)
-			repoID := coverage.AlphaRepoID
-			// Anchor at line 39 inside computeMean's body (metric/series.go). The
-			// handler resolves the SMALLEST ENCLOSING node (computeMean) and reuses
-			// the eng_search_similar vector core, so the same near-dup partner
-			// (averageSamples) surfaces. file_path is matched verbatim against the
-			// stored ABSOLUTE node paths - pass an absolute path. Assert ranking
-			// INVARIANTS only: seed-exclusion, descending ORDERING, near-dup
-			// MEMBERSHIP by node_id - never absolute vector scores.
-			seed := string(h.ResolveID(repoID, coverage.NodeKey{
-				Path: "metric/series.go", Kind: domain.KindFunction, Name: "computeMean"}))
-			want := string(h.ResolveID(repoID, coverage.NodeKey{
-				Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "averageSamples"}))
-			res, rpcErr := h.Call("eng_find_related", map[string]any{
-				"file_path": "metric/series.go", // stored paths are repo-relative
-				"line":      39, "repo_id": repoID, "k": 10,
-			})
-			if rpcErr != nil {
-				t.Fatalf("eng_find_related: %v", rpcErr)
-			}
-			resp, ok := res.(mcp.SearchResponse)
-			if !ok {
-				t.Fatalf("eng_find_related: result type %T, want mcp.SearchResponse", res)
-			}
-			if len(resp.Results) == 0 {
-				t.Fatal("eng_find_related returned no neighbors for the enclosing seed")
-			}
-			found := false
-			for i, hit := range resp.Results {
-				if hit.NodeID == seed {
-					t.Errorf("enclosing seed %q must be excluded from its own neighbors", seed)
-				}
-				if hit.NodeID == want {
-					found = true
-				}
-				// ORDERING: scores are non-increasing.
-				if i > 0 && hit.Score > resp.Results[i-1].Score {
-					t.Errorf("neighbors not sorted descending: hit[%d] %v > hit[%d] %v",
-						i, hit.Score, i-1, resp.Results[i-1].Score)
-				}
-			}
-			if !found {
-				t.Errorf("near-dup averageSamples %q missing from computeMean neighbors", want)
-			}
-		}},
+	}
+}
+
+// assertDupSeedRelated exercises eng_find_duplicates seed=related. Anchor at
+// line 39 inside computeMean's body (metric/series.go). The handler resolves the
+// SMALLEST ENCLOSING node (computeMean) and reuses the seed=similar vector core,
+// so the same near-dup partner (averageSamples) surfaces. Assert ranking
+// INVARIANTS only: seed-exclusion, descending ORDERING, near-dup MEMBERSHIP by
+// node_id - never absolute vector scores.
+func assertDupSeedRelated(t *testing.T) {
+	t.Helper()
+	h := newHarness(t)
+	repoID := coverage.AlphaRepoID
+	seed := string(h.ResolveID(repoID, coverage.NodeKey{
+		Path: "metric/series.go", Kind: domain.KindFunction, Name: "computeMean"}))
+	want := string(h.ResolveID(repoID, coverage.NodeKey{
+		Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "averageSamples"}))
+	res, rpcErr := h.Call("eng_find_duplicates", map[string]any{
+		"seed":      "related",
+		"file_path": "metric/series.go", // stored paths are repo-relative
+		"line":      39, "repo_id": repoID, "k": 10,
+	})
+	if rpcErr != nil {
+		t.Fatalf("eng_find_duplicates seed=related: %v", rpcErr)
+	}
+	resp, ok := res.(mcp.SearchResponse)
+	if !ok {
+		t.Fatalf("eng_find_duplicates seed=related: result type %T, want mcp.SearchResponse", res)
+	}
+	if len(resp.Results) == 0 {
+		t.Fatal("seed=related returned no neighbors for the enclosing seed")
+	}
+	found := false
+	for i, hit := range resp.Results {
+		if hit.NodeID == seed {
+			t.Errorf("enclosing seed %q must be excluded from its own neighbors", seed)
+		}
+		if hit.NodeID == want {
+			found = true
+		}
+		if i > 0 && hit.Score > resp.Results[i-1].Score {
+			t.Errorf("neighbors not sorted descending: hit[%d] %v > hit[%d] %v",
+				i, hit.Score, i-1, resp.Results[i-1].Score)
+		}
+	}
+	if !found {
+		t.Errorf("near-dup averageSamples %q missing from computeMean neighbors", want)
 	}
 }
 
@@ -1413,49 +1414,50 @@ func searchFamily() []coverageTool {
 				t.Errorf("ComputeVariance node %q missing from eng_search_semantic results", want)
 			}
 		}},
-		{family: f, tool: "eng_search_similar", bead: "solov2-r1ue", run: func(t *testing.T) {
-			h := newHarness(t)
-			repoID := coverage.AlphaRepoID
-			// Seed: computeMean. averageSamples is its frozenClones near-dup
-			// partner (facts.go), so it surfaces among the static-embedder
-			// neighbors. Assert ranking INVARIANTS only - never absolute
-			// vector scores: seed-exclusion, descending ORDERING, and
-			// near-dup MEMBERSHIP by node_id.
-			seed := string(h.ResolveID(repoID, coverage.NodeKey{
-				Path: "metric/series.go", Kind: domain.KindFunction, Name: "computeMean"}))
-			want := string(h.ResolveID(repoID, coverage.NodeKey{
-				Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "averageSamples"}))
-			res, rpcErr := h.Call("eng_search_similar", map[string]any{
-				"node_id": seed, "repo_id": repoID, "k": 10,
-			})
-			if rpcErr != nil {
-				t.Fatalf("eng_search_similar: %v", rpcErr)
-			}
-			resp, ok := res.(mcp.SearchResponse)
-			if !ok {
-				t.Fatalf("eng_search_similar: result type %T, want mcp.SearchResponse", res)
-			}
-			if len(resp.Results) == 0 {
-				t.Fatal("eng_search_similar returned no neighbors for an embedded seed")
-			}
-			found := false
-			for i, hit := range resp.Results {
-				if hit.NodeID == seed {
-					t.Errorf("seed node %q must be excluded from its own neighbors", seed)
-				}
-				if hit.NodeID == want {
-					found = true
-				}
-				// ORDERING: scores are non-increasing.
-				if i > 0 && hit.Score > resp.Results[i-1].Score {
-					t.Errorf("neighbors not sorted descending: hit[%d] %v > hit[%d] %v",
-						i, hit.Score, i-1, resp.Results[i-1].Score)
-				}
-			}
-			if !found {
-				t.Errorf("near-dup averageSamples %q missing from computeMean neighbors", want)
-			}
-		}},
+	}
+}
+
+// assertDupSeedSimilar exercises eng_find_duplicates seed=similar. Seed:
+// computeMean. averageSamples is its frozenClones near-dup partner (facts.go),
+// so it surfaces among the static-embedder neighbors. Assert ranking INVARIANTS
+// only - never absolute vector scores: seed-exclusion, descending ORDERING, and
+// near-dup MEMBERSHIP by node_id.
+func assertDupSeedSimilar(t *testing.T) {
+	t.Helper()
+	h := newHarness(t)
+	repoID := coverage.AlphaRepoID
+	seed := string(h.ResolveID(repoID, coverage.NodeKey{
+		Path: "metric/series.go", Kind: domain.KindFunction, Name: "computeMean"}))
+	want := string(h.ResolveID(repoID, coverage.NodeKey{
+		Path: "metric/deviation.go", Kind: domain.KindFunction, Name: "averageSamples"}))
+	res, rpcErr := h.Call("eng_find_duplicates", map[string]any{
+		"seed": "similar", "node_id": seed, "repo_id": repoID, "k": 10,
+	})
+	if rpcErr != nil {
+		t.Fatalf("eng_find_duplicates seed=similar: %v", rpcErr)
+	}
+	resp, ok := res.(mcp.SearchResponse)
+	if !ok {
+		t.Fatalf("eng_find_duplicates seed=similar: result type %T, want mcp.SearchResponse", res)
+	}
+	if len(resp.Results) == 0 {
+		t.Fatal("seed=similar returned no neighbors for an embedded seed")
+	}
+	found := false
+	for i, hit := range resp.Results {
+		if hit.NodeID == seed {
+			t.Errorf("seed node %q must be excluded from its own neighbors", seed)
+		}
+		if hit.NodeID == want {
+			found = true
+		}
+		if i > 0 && hit.Score > resp.Results[i-1].Score {
+			t.Errorf("neighbors not sorted descending: hit[%d] %v > hit[%d] %v",
+				i, hit.Score, i-1, resp.Results[i-1].Score)
+		}
+	}
+	if !found {
+		t.Errorf("near-dup averageSamples %q missing from computeMean neighbors", want)
 	}
 }
 
@@ -1768,76 +1770,109 @@ func dependencyFamily() []coverageTool {
 func cloneFamily() []coverageTool {
 	const f = "clone"
 	return []coverageTool{
-		{family: f, tool: "eng_find_clones", bead: "solov2-8jfs", run: func(t *testing.T) {
-			h := newHarness(t)
-			// Structural-invariants coverage (fuzzy DoD). The manifest's
-			// computeMean/averageSamples are a *near*-dup pair, not byte-identical,
-			// so membership is NOT assertable here: near mode is empty (this harness
-			// runs no autolink → no scored SIMILAR_TO edges).
-			// content_hash is now derived from raw content at node
-			// construction, and the exact-clone query excludes empty content_hash,
-			// so the old false group (all 9 symbols bucketed under '') is gone. The
-			// fixture has no byte-identical pair, so exact mode must return 0 groups;
-			// we also assert no group is keyed on an empty content_hash.
-			excluded := map[string]bool{
-				string(domain.KindPackage): true, string(domain.KindChunk): true,
-				string(domain.KindFile): true, string(domain.KindModule): true,
-				string(domain.KindField): true, "import": true,
-			}
-			ex, exErr := h.Call("eng_find_clones", map[string]any{"repo_id": coverage.AlphaRepoID, "mode": "exact"})
-			if exErr != nil {
-				t.Fatalf("eng_find_clones exact: %v", exErr)
-			}
-			exResp, ok := ex.(mcp.FindClonesResponse)
-			if !ok {
-				t.Fatalf("exact: result type %T, want mcp.FindClonesResponse", ex)
-			}
-			if exResp.Mode != "exact" {
-				t.Errorf("exact: mode = %q, want \"exact\"", exResp.Mode)
-			}
-			if exResp.Groups == nil {
-				t.Error("exact: groups is nil, want non-nil")
-			}
-			if len(exResp.Groups) != 0 {
-				t.Errorf("exact: got %d groups, want 0 (fixture has no byte-identical pair): %+v", len(exResp.Groups), exResp.Groups)
-			}
-			for _, g := range exResp.Groups {
-				if g.ContentHash == "" {
-					t.Errorf("exact group keyed on empty content_hash (false byte-identity): %+v", g)
-				}
-				if g.Size != len(g.Members) || g.Size < 2 {
-					t.Errorf("exact group: size=%d members=%d, want size==members>=2", g.Size, len(g.Members))
-				}
-				for _, m := range g.Members {
-					if excluded[m.Kind] {
-						t.Errorf("exact group member %q has excluded kind %q", m.Name, m.Kind)
-					}
-				}
-			}
-			nr, nrErr := h.Call("eng_find_clones", map[string]any{"repo_id": coverage.AlphaRepoID, "mode": "near", "min_score": 0.0})
-			if nrErr != nil {
-				t.Fatalf("eng_find_clones near: %v", nrErr)
-			}
-			nrResp, ok := nr.(mcp.FindClonesResponse)
-			if !ok {
-				t.Fatalf("near: result type %T, want mcp.FindClonesResponse", nr)
-			}
-			if nrResp.Mode != "near" {
-				t.Errorf("near: mode = %q, want \"near\"", nrResp.Mode)
-			}
-			if nrResp.Clusters == nil {
-				t.Error("near: clusters is nil, want non-nil")
-			}
-			for _, c := range nrResp.Clusters {
-				if c.MinScore > c.MaxScore {
-					t.Errorf("near cluster: min_score=%v > max_score=%v", c.MinScore, c.MaxScore)
-				}
-				if c.Size != len(c.Members) || c.Size < 2 {
-					t.Errorf("near cluster: size=%d members=%d, want size==members>=2", c.Size, len(c.Members))
-				}
-			}
+		// The four former dedup tools merged into eng_find_duplicates; one row
+		// exercises all four seeds (clones, clusters, similar, related).
+		{family: f, tool: "eng_find_duplicates", bead: "solov2-8jfs", run: func(t *testing.T) {
+			assertDupSeedClones(t)
+			assertDupSeedClusters(t)
+			assertDupSeedSimilar(t)
+			assertDupSeedRelated(t)
 		}},
-		{family: f, tool: "eng_find_clusters", bead: "solov2-phn0", run: nil},
+	}
+}
+
+// assertDupSeedClones exercises eng_find_duplicates seed=clones (exact + near).
+// content_hash is derived from raw content at node construction and the
+// exact-clone query excludes empty content_hash, so the fixture (no byte-
+// identical pair) must return 0 exact groups. near mode is empty here (this
+// harness runs no autolink, so no scored SIMILAR_TO edges).
+func assertDupSeedClones(t *testing.T) {
+	t.Helper()
+	h := newHarness(t)
+	excluded := map[string]bool{
+		string(domain.KindPackage): true, string(domain.KindChunk): true,
+		string(domain.KindFile): true, string(domain.KindModule): true,
+		string(domain.KindField): true, "import": true,
+	}
+	ex, exErr := h.Call("eng_find_duplicates", map[string]any{"seed": "clones", "repo_id": coverage.AlphaRepoID, "mode": "exact"})
+	if exErr != nil {
+		t.Fatalf("seed=clones exact: %v", exErr)
+	}
+	exResp, ok := ex.(mcp.FindClonesResponse)
+	if !ok {
+		t.Fatalf("exact: result type %T, want mcp.FindClonesResponse", ex)
+	}
+	if exResp.Mode != "exact" {
+		t.Errorf("exact: mode = %q, want \"exact\"", exResp.Mode)
+	}
+	if exResp.Groups == nil {
+		t.Error("exact: groups is nil, want non-nil")
+	}
+	if len(exResp.Groups) != 0 {
+		t.Errorf("exact: got %d groups, want 0 (fixture has no byte-identical pair): %+v", len(exResp.Groups), exResp.Groups)
+	}
+	for _, g := range exResp.Groups {
+		if g.ContentHash == "" {
+			t.Errorf("exact group keyed on empty content_hash (false byte-identity): %+v", g)
+		}
+		if g.Size != len(g.Members) || g.Size < 2 {
+			t.Errorf("exact group: size=%d members=%d, want size==members>=2", g.Size, len(g.Members))
+		}
+		for _, m := range g.Members {
+			if excluded[m.Kind] {
+				t.Errorf("exact group member %q has excluded kind %q", m.Name, m.Kind)
+			}
+		}
+	}
+	nr, nrErr := h.Call("eng_find_duplicates", map[string]any{"seed": "clones", "repo_id": coverage.AlphaRepoID, "mode": "near", "min_score": 0.0})
+	if nrErr != nil {
+		t.Fatalf("seed=clones near: %v", nrErr)
+	}
+	nrResp, ok := nr.(mcp.FindClonesResponse)
+	if !ok {
+		t.Fatalf("near: result type %T, want mcp.FindClonesResponse", nr)
+	}
+	if nrResp.Mode != "near" {
+		t.Errorf("near: mode = %q, want \"near\"", nrResp.Mode)
+	}
+	if nrResp.Clusters == nil {
+		t.Error("near: clusters is nil, want non-nil")
+	}
+	for _, c := range nrResp.Clusters {
+		if c.MinScore > c.MaxScore {
+			t.Errorf("near cluster: min_score=%v > max_score=%v", c.MinScore, c.MaxScore)
+		}
+		if c.Size != len(c.Members) || c.Size < 2 {
+			t.Errorf("near cluster: size=%d members=%d, want size==members>=2", c.Size, len(c.Members))
+		}
+	}
+}
+
+// assertDupSeedClusters exercises eng_find_duplicates seed=clusters: a
+// whole-repo pass returns a well-formed (possibly empty) cluster list with the
+// scope echoed back. Structural/near tiers need scored edges this harness does
+// not populate, so assert envelope INVARIANTS, not membership.
+func assertDupSeedClusters(t *testing.T) {
+	t.Helper()
+	h := newHarness(t)
+	res, rpcErr := h.Call("eng_find_duplicates", map[string]any{"seed": "clusters", "repo_id": coverage.AlphaRepoID})
+	if rpcErr != nil {
+		t.Fatalf("seed=clusters: %v", rpcErr)
+	}
+	resp, ok := res.(mcp.FindClustersResponse)
+	if !ok {
+		t.Fatalf("seed=clusters: result type %T, want mcp.FindClustersResponse", res)
+	}
+	if resp.Scope != "repo" {
+		t.Errorf("seed=clusters: scope = %q, want \"repo\"", resp.Scope)
+	}
+	if resp.Clusters == nil {
+		t.Error("seed=clusters: clusters is nil, want non-nil")
+	}
+	for _, c := range resp.Clusters {
+		if c.Size != len(c.Members) || c.Size < 2 {
+			t.Errorf("cluster: size=%d members=%d, want size==members>=2", c.Size, len(c.Members))
+		}
 	}
 }
 

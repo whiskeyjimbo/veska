@@ -140,7 +140,7 @@ type TodoFact struct {
 }
 
 // CloneFact names a near-duplicate pair the clone detector should relate
-// (eng_find_clones). The two members share structure with only identifier
+// (eng_find_duplicates seed=clones). The two members share structure with only identifier
 // differences. Frozen as keys, not scores - the exact similarity is the
 // clone tool's concern, not this manifest's.
 type CloneFact struct {

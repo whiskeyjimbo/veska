@@ -4,7 +4,7 @@
 
 Every tool the daemon publishes over MCP (`tools/list`), with its input schema. Your editor discovers these automatically once it's connected (see [Connecting your editor](../guides/editor-setup.md)); this page is the human-readable catalog.
 
-39 tools.
+36 tools.
 
 ## `eng_add_repo`
 
@@ -138,9 +138,9 @@ Symbol-grain diff between two git refs - answers 'which functions/methods/struct
 ```
 
 
-## `eng_find_clones`
+## `eng_find_duplicates`
 
-Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source text is byte-for-byte identical (literal copy-paste), detected by content_hash equality - deterministic, no embeddings. mode='near': clusters of symbols whose persisted SIMILAR_TO similarity exceeds a threshold higher than auto-link's 'related' cutoff (fuzzy near-duplicates - renamed copies, drifted variants); reads scores auto-link already stored, runs no new similarity sweep. For 'what else looks LIKE this ONE symbol?' use eng_search_similar instead. Container/sub-symbol kinds (package, chunk, file, module, field, import) are excluded so boilerplate doesn't flood results. NOTE: near mode needs SIMILAR_TO edges carrying a score, which only exist after a promotion/reindex on a build with the score column - older indexes report no near clusters until reindexed.
+Find duplicate / near-duplicate code, for the 'avoid duplication' goal. Best when there is NO obvious grep string to match on; if a literal copy-paste shares a searchable token, grep is cheaper. The 'seed' param selects the strategy: seed=clusters (default) returns whole-repo tiered clusters (exact byte-identical, structural Type-2, and vector-near), ranked tightest first, each member with repo_id/file/line for a dedupe task - scope=all clusters across every registered repo; seed=clones returns whole-repo groups for a single mode (mode=exact byte-identical via content_hash, or mode=near thresholded SIMILAR_TO clusters); seed=similar returns vector-nearest neighbors of ONE existing symbol (pass node_id or symbol) - 'what else looks like this?'; seed=related does the same seeded by a (file_path, line) cursor. NOTE: structural/near tiers need structural_hash + scored SIMILAR_TO edges from a promotion/reindex on a current build.
 
 **Input schema:**
 
@@ -149,15 +149,16 @@ Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source 
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "description": "Find duplicate code in a repo/branch. mode=exact returns 'groups' (byte-identical via content_hash); mode=near returns 'clusters' (fuzzy, thresholded SIMILAR_TO edges).",
   "properties": {
-    "repo_id": {
+    "seed": {
       "type": "string",
-      "description": "Repo to scan. Resolved from cwd when omitted."
-    },
-    "branch": {
-      "type": "string",
-      "description": "Branch to scan. Defaults to the repo's active branch."
+      "enum": [
+        "clusters",
+        "clones",
+        "similar",
+        "related"
+      ],
+      "description": "Strategy: 'clusters' (default) whole-repo tiered clusters; 'clones' whole-repo single-mode groups; 'similar' neighbors of one node_id/symbol; 'related' neighbors of a (file_path, line)."
     },
     "mode": {
       "type": "string",
@@ -165,46 +166,7 @@ Find duplicate code. mode='exact' (default): groups of >=2 symbols whose source 
         "exact",
         "near"
       ],
-      "description": "exact (default): byte-identical clones via content_hash, populates 'groups'. near: fuzzy clusters from thresholded SIMILAR_TO edges, populates 'clusters'."
-    },
-    "min_score": {
-      "type": "number",
-      "description": "near mode only: minimum SIMILAR_TO edge score (higher = more similar). Omit to use the default calibrated for the elected embedder (model spaces differ; near-dup and 'related' bands overlap, so this is a high-precision/partial-recall knob). Lower it for more recall."
-    },
-    "limit": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Max groups/clusters to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."
-    },
-    "cwd": {
-      "type": "string",
-      "description": "Working directory used to resolve the active repo when repo_id is omitted."
-    }
-  }
-}
-```
-
-
-## `eng_find_clusters`
-
-Whole-repo (or cross-repo) similar-code clusters for de-dupe triage. One pass returns groups of >=2 symbols at three tiers, ranked tightest first: 'exact' (byte-identical copy-paste, content_hash), 'structural' (same shape after renaming variables/literals - Type-2 clones, structural_hash), and 'near' (vector-similar above the elected embedder's calibrated threshold). A symbol appears at most once, at its tightest tier. No seed needed. scope='all' clusters across EVERY registered repo (exact+structural only - cross-repo near is not yet computed); 'path' narrows to a file_path prefix; 'tiers' selects a subset. Container kinds (package/chunk/file/module/field/import) are excluded. Each cluster's members carry repo_id/file/line so you can open a verify-and-dedupe task per grouping. NOTE: structural/near need structural_hash + scored SIMILAR_TO edges, populated by a promotion/reindex on a current build - reindex older graphs first.
-
-**Input schema:**
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Unified similar-code clusters (exact + structural + near), ranked, for de-dupe task creation. No seed required.",
-  "properties": {
-    "repo_id": {
-      "type": "string",
-      "description": "Repo to scan (scope=repo). Resolved from cwd when omitted."
-    },
-    "branch": {
-      "type": "string",
-      "description": "Branch to scan. Defaults to the repo's active branch (scope=repo) or 'main' (scope=all)."
+      "description": "seed=clones only: exact (default, byte-identical via content_hash) or near (thresholded SIMILAR_TO clusters)."
     },
     "scope": {
       "type": "string",
@@ -212,28 +174,56 @@ Whole-repo (or cross-repo) similar-code clusters for de-dupe triage. One pass re
         "repo",
         "all"
       ],
-      "description": "repo (default): one repo. all: cluster across every registered repo (cross-repo; exact+structural only)."
+      "description": "seed=clusters only: repo (default) or all (cross-repo; exact+structural only)."
     },
     "tiers": {
       "type": "string",
-      "description": "Comma-separated subset of exact,structural,near. Omit for all tiers."
+      "description": "seed=clusters only: comma-separated subset of exact,structural,near. Omit for all tiers."
     },
     "min_score": {
       "type": "number",
-      "description": "near tier only: minimum SIMILAR_TO score. Omit for the elected embedder's calibrated default; lower for more recall."
+      "description": "seed=clones (near) / seed=clusters (near tier): minimum SIMILAR_TO score. Omit for the elected embedder's calibrated default."
     },
     "path": {
       "type": "string",
-      "description": "Restrict to nodes whose file_path starts with this prefix (e.g. internal/infrastructure/mcp)."
+      "description": "seed=clusters only: restrict to nodes whose file_path starts with this prefix."
+    },
+    "node_id": {
+      "type": "string",
+      "description": "seed=similar: node to seed the neighbor search from."
+    },
+    "symbol": {
+      "type": "string",
+      "description": "seed=similar: symbol name (resolved like eng_find_symbol; ambiguity rejected)."
+    },
+    "file_path": {
+      "type": "string",
+      "description": "seed=related: file containing the cursor."
+    },
+    "line": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "seed=related: 1-indexed line; the enclosing node's embedding is the seed."
+    },
+    "repo_id": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "k": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "seed=similar/related: neighbor count (default 10). 'limit' is an alias."
     },
     "limit": {
       "type": "integer",
       "minimum": 1,
-      "description": "Max clusters to return (default 100). The response 'total' reports the full count and 'truncated' is true when capped."
+      "description": "seed=similar/related: alias for k. seed=clones/clusters: max groups/clusters (default 100)."
     },
     "cwd": {
       "type": "string",
-      "description": "Working directory used to resolve the active repo when repo_id is omitted (scope=repo)."
+      "description": "Working directory used to resolve the active repo when repo_id is omitted."
     }
   }
 }
@@ -320,60 +310,9 @@ Find the owner of a file via CODEOWNERS lookup or git blame fallback.
 ```
 
 
-## `eng_find_related`
-
-Find symbols semantically similar to the code at a given (file_path, line). Use as a moat-pivot from a search hit, an error trace, or an open editor cursor: 'what else in the graph looks like this?'. Resolves the smallest enclosing symbol or chunk for the given line, then runs the same vector-neighborhood search as eng_search_similar - no separate find_symbol round-trip needed.
-
-**Input schema:**
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Find symbols semantically similar to the code at a (file_path, line). The handler resolves the smallest enclosing node and reuses the eng_search_similar vector-neighborhood path. Line is 1-indexed.",
-  "properties": {
-    "file_path": {
-      "type": "string",
-      "description": "Absolute path or repo-relative path to the file."
-    },
-    "line": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "1-indexed source line; the enclosing node's embedding is the seed."
-    },
-    "repo_id": {
-      "type": "string"
-    },
-    "branch": {
-      "type": "string"
-    },
-    "k": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Neighbor count (default 10). 'limit' is accepted as an alias."
-    },
-    "limit": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Alias for k."
-    },
-    "cwd": {
-      "type": "string",
-      "description": "Working directory used to resolve the active repo when repo_id is omitted."
-    }
-  },
-  "required": [
-    "file_path",
-    "line"
-  ]
-}
-```
-
-
 ## `eng_find_symbol`
 
-Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). Unqualified names also match - 'Run' finds Server.Run, Command.Run, etc., with exact matches first. Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries - it's deterministic and exact.
+Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). Unqualified names also match - 'Run' finds Server.Run, Command.Run, etc., with exact matches first. Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_find_duplicates without another lookup. Prefer this over eng_search_semantic for known-identifier queries - it's deterministic and exact.
 
 _Reads through the staging overlay (reflects uncommitted edits)._
 
@@ -1268,51 +1207,6 @@ Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallb
   "required": [
     "query"
   ]
-}
-```
-
-
-## `eng_search_similar`
-
-Vector-nearest-neighbor search seeded by an existing symbol's embedding - 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.
-
-**Input schema:**
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "k-nearest-neighbor vector search seeded by an existing node. Accepts node_id (exact) or symbol (resolved via FindNodes; ambiguous matches rejected)",
-  "properties": {
-    "node_id": {
-      "type": "string"
-    },
-    "symbol": {
-      "type": "string",
-      "description": "Alias for node_id by symbol name (resolved like eng_find_symbol). Ambiguity is rejected."
-    },
-    "repo_id": {
-      "type": "string"
-    },
-    "branch": {
-      "type": "string"
-    },
-    "k": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Neighbor count (default 10). 'limit' is accepted as an alias."
-    },
-    "limit": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Alias for k."
-    },
-    "cwd": {
-      "type": "string",
-      "description": "Working directory used to resolve the active repo when repo_id is omitted."
-    }
-  }
 }
 ```
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package clonescmd holds the delivery-layer logic behind `veska clones`
-// (eng_find_clones): exact-clone detection by content_hash equality. It proxies
+// (eng_find_duplicates seed=clones): exact-clone detection by content_hash equality. It proxies
 // to the daemon like the other read commands and renders one block per clone
 // group.
 package clonescmd
@@ -51,10 +51,11 @@ type Params struct {
 	Out      io.Writer
 }
 
-// Run wraps eng_find_clones: exact byte-identical groups (default) or, with
-// Near set, fuzzy near-duplicate clusters from thresholded SIMILAR_TO edges.
+// Run wraps eng_find_duplicates seed=clones: exact byte-identical groups
+// (default) or, with Near set, fuzzy near-duplicate clusters from thresholded
+// SIMILAR_TO edges.
 func Run(ctx context.Context, p Params) error {
-	params := map[string]any{}
+	params := map[string]any{"seed": "clones"}
 	if p.RepoID != "" {
 		params["repo_id"] = p.RepoID
 	}
@@ -69,7 +70,7 @@ func Run(ctx context.Context, p Params) error {
 	}
 
 	var raw json.RawMessage
-	if err := mcpclient.Call(ctx, "eng_find_clones", params, &raw); err != nil {
+	if err := mcpclient.Call(ctx, "eng_find_duplicates", params, &raw); err != nil {
 		return fmt.Errorf("clones: %w", err)
 	}
 	if p.JSONOut {

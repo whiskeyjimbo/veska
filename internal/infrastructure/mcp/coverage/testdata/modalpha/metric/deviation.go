@@ -3,7 +3,7 @@
 package metric
 
 // averageSamples is a near-duplicate of computeMean: same structure, same
-// loop, only the local identifiers differ. It exists to give eng_find_clones
+// loop, only the local identifiers differ. It exists to give eng_find_duplicates (seed=clones)
 // a genuine near-duplicate pair within one module.
 func averageSamples(values []float64) float64 {
 	if len(values) == 0 {

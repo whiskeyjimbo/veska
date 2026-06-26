@@ -36,13 +36,31 @@ func (f *fakeCloneFinder) Clusters(_ context.Context, opts duplicates.ClusterOpt
 	return f.unified, nil
 }
 
+// registerDupesForTest registers the merged eng_find_duplicates tool with only
+// the clone finder wired (search-seed deps nil, exercised elsewhere), for the
+// clones/clusters seed tests.
+func registerDupesForTest(finder CloneFinder, repos application.RepoLister) *Registry {
+	r := NewRegistry()
+	RegisterDuplicatesTool(r, finder, nil, nil, nil, repos, nil)
+	return r
+}
+
+// dupRequest builds an eng_find_duplicates request with the given seed injected.
+func dupRequest(t *testing.T, seed string, params map[string]any) *Request {
+	t.Helper()
+	out := map[string]any{"seed": seed}
+	for k, v := range params {
+		out[k] = v
+	}
+	raw, _ := json.Marshal(out)
+	return &Request{Method: "eng_find_duplicates", Params: json.RawMessage(raw)}
+}
+
 func dispatchClones(t *testing.T, finder CloneFinder, params map[string]any) FindClonesResponse {
 	t.Helper()
 	repos := &stubRepoLister{repos: []application.RepoRecord{{RepoID: "r1", ActiveBranch: "main"}}}
-	r := NewRegistry()
-	RegisterCloneTools(r, finder, repos)
-	raw, _ := json.Marshal(params)
-	req := &Request{Method: "eng_find_clones", Params: json.RawMessage(raw)}
+	r := registerDupesForTest(finder, repos)
+	req := dupRequest(t, "clones", params)
 	result, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
 	if rpcErr != nil {
 		t.Fatalf("dispatch: %+v", rpcErr)
@@ -104,10 +122,8 @@ func TestFindClones_NearMode(t *testing.T) {
 
 func TestFindClones_InvalidMode(t *testing.T) {
 	repos := &stubRepoLister{repos: []application.RepoRecord{{RepoID: "r1", ActiveBranch: "main"}}}
-	r := NewRegistry()
-	RegisterCloneTools(r, &fakeCloneFinder{}, repos)
-	raw, _ := json.Marshal(map[string]any{"repo_id": "r1", "mode": "bogus"})
-	req := &Request{Method: "eng_find_clones", Params: json.RawMessage(raw)}
+	r := registerDupesForTest(&fakeCloneFinder{}, repos)
+	req := dupRequest(t, "clones", map[string]any{"repo_id": "r1", "mode": "bogus"})
 	_, rpcErr := r.Dispatch(context.Background(), domain.Actor{ID: "agent:test", Kind: domain.ActorKindAgent}, req)
 	if rpcErr == nil {
 		t.Fatalf("expected an error for invalid mode")

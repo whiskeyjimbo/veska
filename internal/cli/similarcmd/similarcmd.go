@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package similarcmd holds the delivery-layer logic behind `veska similar`
-// (eng_search_similar) and `veska related` (eng_find_related). Both ride the
+// (eng_find_duplicates seed=similar) and `veska related` (eng_find_duplicates seed=related). Both ride the
 // same vector-neighborhood path on the daemon and return a SearchResponse
 // envelope, so they share one renderer here.
 package similarcmd
@@ -41,10 +41,10 @@ type SimilarParams struct {
 	Out      io.Writer
 }
 
-// RunSimilar wraps eng_search_similar: vector-nearest-neighbor search seeded
-// by an existing symbol or node_id.
+// RunSimilar wraps eng_find_duplicates seed=similar: vector-nearest-neighbor
+// search seeded by an existing symbol or node_id.
 func RunSimilar(ctx context.Context, p SimilarParams) error {
-	params := map[string]any{}
+	params := map[string]any{"seed": "similar"}
 	if graphcmd.LooksLikeNodeID(p.Selector) {
 		params["node_id"] = p.Selector
 	} else {
@@ -56,7 +56,7 @@ func RunSimilar(ctx context.Context, p SimilarParams) error {
 	if p.K > 0 {
 		params["k"] = p.K
 	}
-	return callAndRender(ctx, "eng_search_similar", params, p.Out, p.JSONOut)
+	return callAndRender(ctx, "similar", "eng_find_duplicates", params, p.Out, p.JSONOut)
 }
 
 // RelatedParams bundles the inputs of RunRelated.
@@ -69,24 +69,24 @@ type RelatedParams struct {
 	Out      io.Writer
 }
 
-// RunRelated wraps eng_find_related: find symbols similar to the code at a
-// (file_path, line) anchor. The daemon resolves the smallest enclosing node
-// and reuses the eng_search_similar neighborhood path.
+// RunRelated wraps eng_find_duplicates seed=related: find symbols similar to
+// the code at a (file_path, line) anchor. The daemon resolves the smallest
+// enclosing node and reuses the seed=similar neighborhood path.
 func RunRelated(ctx context.Context, p RelatedParams) error {
-	params := map[string]any{"file_path": p.FilePath, "line": p.Line}
+	params := map[string]any{"seed": "related", "file_path": p.FilePath, "line": p.Line}
 	if p.RepoID != "" {
 		params["repo_id"] = p.RepoID
 	}
 	if p.K > 0 {
 		params["k"] = p.K
 	}
-	return callAndRender(ctx, "eng_find_related", params, p.Out, p.JSONOut)
+	return callAndRender(ctx, "related", "eng_find_duplicates", params, p.Out, p.JSONOut)
 }
 
-func callAndRender(ctx context.Context, tool string, params map[string]any, out io.Writer, jsonOut bool) error {
+func callAndRender(ctx context.Context, verb, tool string, params map[string]any, out io.Writer, jsonOut bool) error {
 	var raw json.RawMessage
 	if err := mcpclient.Call(ctx, tool, params, &raw); err != nil {
-		return fmt.Errorf("%s: %w", shortTool(tool), err)
+		return fmt.Errorf("%s: %w", verb, err)
 	}
 	if jsonOut {
 		enc := json.NewEncoder(out)
@@ -121,16 +121,4 @@ func renderNeighbors(w io.Writer, resp searchResp) {
 	for _, d := range resp.DegradedReasons {
 		fmt.Fprintf(w, "[degraded: %s]\n", d)
 	}
-}
-
-// shortTool turns "eng_search_similar"/"eng_find_related" into the user-facing
-// verb for error prefixes.
-func shortTool(tool string) string {
-	switch tool {
-	case "eng_search_similar":
-		return "similar"
-	case "eng_find_related":
-		return "related"
-	}
-	return tool
 }

@@ -128,23 +128,6 @@ func findSimilarByNodeID(ctx context.Context, lookup SimilarLookup, vectors port
 	return out, nil
 }
 
-var findRelatedInputSchema = []byte(`{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Find symbols semantically similar to the code at a (file_path, line). The handler resolves the smallest enclosing node and reuses the eng_search_similar vector-neighborhood path. Line is 1-indexed.",
-  "properties": {
-    "file_path": {"type": "string", "description": "Absolute path or repo-relative path to the file."},
-    "line":      {"type": "integer", "minimum": 1, "description": "1-indexed source line; the enclosing node's embedding is the seed."},
-    "repo_id":   {"type": "string"},
-    "branch":    {"type": "string"},
-    "k":         {"type": "integer", "minimum": 1, "description": "Neighbor count (default 10). 'limit' is accepted as an alias."},
-    "limit":     {"type": "integer", "minimum": 1, "description": "Alias for k."},
-    "cwd":       {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
-  },
-  "required": ["file_path", "line"]
-}`)
-
 type findRelatedParams struct {
 	FilePath string `json:"file_path"`
 	Line     int    `json:"line"`
