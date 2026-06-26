@@ -75,6 +75,13 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 				dtos[i].RepoID = repoByNode[dtos[i].NodeID]
 			}
 		}
+		// The low-confidence floor is RRF-calibrated, so it only applies to the
+		// single-repo (non-fanout) path. The fanout path fuses by cosine
+		// similarity (a different, higher scale) and has no equivalent absolute
+		// floor, so applying 0.018 there would emit a meaningless signal.
+		if !fanout && lowConfidenceTop(results) {
+			reasons = append(reasons, DegradedReasonLowConfidence)
+		}
 		var indexing []string
 		// Empty results during active scanning return an indexing degraded reason.
 		if len(dtos) == 0 {
@@ -93,6 +100,23 @@ func makeSearchSemanticHandler(svc *search.Service, rec *savings.Recorder, repos
 		}
 		return SearchResponse{Results: dtos, DegradedReasons: reasons, IndexingRepos: indexing, WakeReconcilingRepos: reconciling}, nil
 	}
+}
+
+// lowConfidenceTop reports whether the best non-chunk result's absolute RRF
+// score sits below search.WeakTopAbsolute, meaning the top hit was corroborated
+// by only one retriever - the precise-logic miss signature. Empty results are
+// not low-confidence here (they carry their own indexing/empty handling).
+func lowConfidenceTop(results []search.Result) bool {
+	var top float32
+	for _, r := range results {
+		if r.Kind == string(domain.KindChunk) {
+			continue
+		}
+		if r.Score > top {
+			top = r.Score
+		}
+	}
+	return top > 0 && top < search.WeakTopAbsolute
 }
 
 // runSemanticFanout queries targets and fuses results using cosine similarity or rank reciprocal fusion.

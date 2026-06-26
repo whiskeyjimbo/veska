@@ -43,6 +43,14 @@ const DegradedReasonEmbeddingsPending = "embeddings_pending"
 // rebuilding the lexical index, so lexical/keyword search results are partial.
 const DegradedReasonFTSPending = "fts_pending"
 
+// DegradedReasonLowConfidence is emitted when the top semantic hit's absolute
+// RRF score is below search.WeakTopAbsolute - the query landed in only one
+// retriever (vector OR lexical, not both), the signature of a precise-logic
+// miss. It steers the agent to switch tools (eng_find_symbol / grep for a
+// known identifier) rather than re-run the same query, which is the spiral the
+// A/B bench measured (P3: +50%..+467% from low-yield repeat semantic calls).
+const DegradedReasonLowConfidence = "low_confidence"
+
 // SimilarLookup defines the query interface for checking code similarity by content hash.
 type SimilarLookup interface {
 	ContentHashForNode(ctx context.Context, repoID, branch, nodeID string) (contentHash string, ready bool, err error)
