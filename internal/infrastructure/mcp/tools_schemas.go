@@ -223,47 +223,20 @@ var tracePathInputSchema = json.RawMessage(`{
   }
 }`)
 
+// blastRadiusInputSchema is the union schema for the merged eng_get_blast_radius
+// tool. 'seed' selects the seed mode; node_id/symbol apply to seed=symbol and
+// ref_a/ref_b apply to seed=diff. The merged tool validates against this union,
+// so each seed mode silently ignores the params that belong to the others.
 var blastRadiusInputSchema = json.RawMessage(`{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "node_id":           {"type": "string", "description": "node_id to fan out from. Use eng_find_symbol to obtain one. Mutually exclusive with symbol."},
-    "symbol":            {"type": "string", "description": "Symbol name to fan out from (parity with eng_get_call_chain). Ambiguous matches are rejected; pass node_id to disambiguate."},
-    "repo_id":           {"type": "string"},
-    "branch":            {"type": "string"},
-    "max_depth":         {"type": "integer", "minimum": 1},
-    "max_nodes":         {"type": "integer", "minimum": 1},
-    "direction":         {"type": "string", "enum": ["in", "out", "both", "callers", "callees"], "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."},
-    "expand_cross_repo": {"type": "boolean"},
-    "cwd":               {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
-  }
-}`)
-
-var diffBlastRadiusInputSchema = json.RawMessage(`{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Blast radius of a git diff. With ref_a and ref_b both set, diffs that ref range; with both omitted, diffs the working tree against HEAD. ref_a and ref_b must be supplied together.",
-  "properties": {
-    "repo_id":           {"type": "string"},
-    "branch":            {"type": "string"},
-    "ref_a":             {"type": "string", "description": "Base git ref (e.g. 'main', 'HEAD~5', a SHA). Must be paired with ref_b; omit both to diff the working tree against HEAD."},
-    "ref_b":             {"type": "string", "description": "Target git ref. Must be paired with ref_a."},
-    "max_depth":         {"type": "integer", "minimum": 1},
-    "max_nodes":         {"type": "integer", "minimum": 1},
-    "direction":         {"type": "string", "enum": ["in", "out", "both", "callers", "callees"], "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."},
-    "expand_cross_repo": {"type": "boolean"},
-    "cwd":               {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
-  }
-}`)
-
-var dirtyBlastRadiusInputSchema = json.RawMessage(`{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Blast radius of currently-staged (uncommitted) changes.",
-  "properties": {
+    "seed":              {"type": "string", "enum": ["symbol", "dirty", "diff"], "description": "Seed mode: 'symbol' (default) fans out from node_id/symbol; 'dirty' from the staged (uncommitted) overlay; 'diff' from a git diff (working tree vs HEAD, or ref_a..ref_b)."},
+    "node_id":           {"type": "string", "description": "seed=symbol: node_id to fan out from. Use eng_find_symbol to obtain one. Mutually exclusive with symbol."},
+    "symbol":            {"type": "string", "description": "seed=symbol: symbol name to fan out from (parity with eng_get_call_chain). Ambiguous matches are rejected; pass node_id to disambiguate."},
+    "ref_a":             {"type": "string", "description": "seed=diff: base git ref (e.g. 'main', 'HEAD~5', a SHA). Must be paired with ref_b; omit both to diff the working tree against HEAD."},
+    "ref_b":             {"type": "string", "description": "seed=diff: target git ref. Must be paired with ref_a."},
     "repo_id":           {"type": "string"},
     "branch":            {"type": "string"},
     "max_depth":         {"type": "integer", "minimum": 1},

@@ -62,8 +62,8 @@ for these when the four above aren't enough:
 
 - ` + "`eng_get_node`" + `, ` + "`eng_get_file_nodes`" + ` - node-by-id /
   per-file listing when you already have an identifier.
-- ` + "`eng_find_changed_symbols`" + `, ` + "`eng_get_diff_blast_radius`" + ` - symbol-grain
-  diff and downstream-impact between two git refs, for PR review and regression triage.
+- ` + "`eng_find_changed_symbols`" + ` - symbol-grain diff between two git refs,
+  for PR review and regression triage (pair with ` + "`eng_get_blast_radius`" + ` seed=diff for downstream impact).
 - ` + "`eng_list_repos`" + `, ` + "`eng_get_repo`" + `, ` + "`eng_get_current_repo`" + ` - repo registry inspection.
 - ` + "`eng_list_dependencies`" + ` - modules this repo calls into, with sampled call-sites.
 - ` + "`eng_list_findings`" + `, ` + "`eng_get_finding`" + `, ` + "`eng_close_finding`" + `, ` + "`eng_suppress_finding`" + `,

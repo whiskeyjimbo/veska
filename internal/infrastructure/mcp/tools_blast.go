@@ -74,32 +74,66 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	// The three former blast tools (symbol / dirty / diff seed) are merged into
+	// a single eng_get_blast_radius selected by the 'seed' param. IncludesStaging
+	// is true because seed=dirty reads the staging overlay; the other seed modes
+	// ignore it. The sub-handlers below preserve each seed's exact behavior.
+	symbolH := makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound, cfg.scans, cfg.reconcile)
+	dirtyH := makeDirtyBlastRadiusHandler(svc, repos, cfg.resolve, cfg.resolveInbound)
+	diffH := makeDiffBlastRadiusHandler(svc, DiffBlastDeps{
+		RepoRoot:            repoRoot,
+		ChangedFiles:        changedFiles,
+		ChangedFilesBetween: cfg.changedFilesBetween,
+	}, repos, cfg.resolve, cfg.resolveInbound)
 	r.MustRegister(ToolSpec{
 		Name:            "eng_get_blast_radius",
 		Description:     DescBlastRadius,
-		IncludesStaging: false,
+		IncludesStaging: true,
 		Tier:            Tier1,
 		InputSchema:     blastRadiusInputSchema,
-		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound, cfg.scans, cfg.reconcile),
+		Handler:         makeUnifiedBlastHandler(symbolH, dirtyH, diffH),
 	})
-	r.MustRegister(ToolSpec{
-		Name:            "eng_get_dirty_blast_radius",
-		Description:     DescDirtyBlastRadius,
-		IncludesStaging: true,
-		InputSchema:     dirtyBlastRadiusInputSchema,
-		Handler:         makeDirtyBlastRadiusHandler(svc, repos, cfg.resolve, cfg.resolveInbound),
-	})
-	r.MustRegister(ToolSpec{
-		Name:            "eng_get_diff_blast_radius",
-		Description:     DescDiffBlastRadius,
-		IncludesStaging: false,
-		InputSchema:     diffBlastRadiusInputSchema,
-		Handler: makeDiffBlastRadiusHandler(svc, DiffBlastDeps{
-			RepoRoot:            repoRoot,
-			ChangedFiles:        changedFiles,
-			ChangedFilesBetween: cfg.changedFilesBetween,
-		}, repos, cfg.resolve, cfg.resolveInbound),
-	})
+}
+
+// blastSeed selects which adjacency the merged blast tool seeds from.
+type blastSeed string
+
+const (
+	// blastSeedSymbol fans out from a single node/symbol (the default).
+	blastSeedSymbol blastSeed = "symbol"
+	// blastSeedDirty seeds from the staged (uncommitted) overlay.
+	blastSeedDirty blastSeed = "dirty"
+	// blastSeedDiff seeds from a git diff (working tree vs HEAD, or a ref range).
+	blastSeedDiff blastSeed = "diff"
+)
+
+// seedSelector is the slice of params the merged handler peeks at to route to a
+// sub-handler without consuming the rest of the payload (each sub-handler binds
+// its own params from raw).
+type seedSelector struct {
+	Seed string `json:"seed"`
+}
+
+// makeUnifiedBlastHandler routes eng_get_blast_radius to the symbol / dirty /
+// diff sub-handler based on the 'seed' param. Defaulting empty to symbol keeps
+// the historical node_id/symbol behavior unchanged for existing callers.
+func makeUnifiedBlastHandler(symbolH, dirtyH, diffH ToolHandler) ToolHandler {
+	return func(ctx context.Context, actor domain.Actor, raw json.RawMessage) (any, *RPCError) {
+		var sel seedSelector
+		if rpcErr := bindParams(raw, &sel); rpcErr != nil {
+			return nil, rpcErr
+		}
+		switch blastSeed(sel.Seed) {
+		case "", blastSeedSymbol:
+			return symbolH(ctx, actor, raw)
+		case blastSeedDirty:
+			return dirtyH(ctx, actor, raw)
+		case blastSeedDiff:
+			return diffH(ctx, actor, raw)
+		default:
+			return nil, &RPCError{Code: CodeInvalidParams, Message: fmt.Sprintf("unknown seed %q (want %q, %q or %q)", sel.Seed, blastSeedSymbol, blastSeedDirty, blastSeedDiff)}
+		}
+	}
 }
 
 // parseBlastDirection accepts either traversal vocabulary (in|out|both or

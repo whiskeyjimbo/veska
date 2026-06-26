@@ -4,7 +4,7 @@
 
 Every tool the daemon publishes over MCP (`tools/list`), with its input schema. Your editor discovers these automatically once it's connected (see [Connecting your editor](../guides/editor-setup.md)); this page is the human-readable catalog.
 
-38 tools.
+39 tools.
 
 ## `eng_add_repo`
 
@@ -96,7 +96,7 @@ Terminate an active suppression now by setting expires_at to the current time.
 
 ## `eng_find_changed_symbols`
 
-Symbol-grain diff between two git refs - answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back. Pair with eng_get_diff_blast_radius for 'what's downstream of these changes'.
+Symbol-grain diff between two git refs - answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back. Pair with eng_get_blast_radius (seed=diff) for 'what's downstream of these changes'.
 
 **Input schema:**
 
@@ -234,6 +234,42 @@ Whole-repo (or cross-repo) similar-code clusters for de-dupe triage. One pass re
     "cwd": {
       "type": "string",
       "description": "Working directory used to resolve the active repo when repo_id is omitted (scope=repo)."
+    }
+  }
+}
+```
+
+
+## `eng_find_implementations`
+
+Given an interface, returns the concrete types that satisfy it; given a concrete type, returns the interfaces it implements. Direction is inferred from the seed kind, so no direction param is needed. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity rejected). Backed by IMPLEMENTS edges resolved from Go method sets; edges carry a confidence (Definite/Strong/Probable) reflecting how the methods matched.
+
+**Input schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Given an interface, returns the concrete types that implement it; given a concrete type, returns the interfaces it satisfies. Direction is inferred from the seed kind. One of node_id or symbol is required.",
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "description": "Resolve directly by node_id."
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Type or interface name; resolved against repo_id+branch (ambiguity rejected)."
+    },
+    "repo_id": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory used to resolve the active repo when repo_id is omitted."
     }
   }
 }
@@ -410,7 +446,9 @@ List parser-detected TODO/FIXME markers for the given (repo, branch).
 
 ## `eng_get_blast_radius`
 
-Compute the blast radius (callers/callees/both) of a symbol - 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, or when scoping a refactor. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced. Pass node_id (exact) or symbol (resolved via eng_find_symbol). For working-tree changes use eng_get_diff_blast_radius; for in-progress staged edits use eng_get_dirty_blast_radius.
+Compute the blast radius (callers/callees/both) - 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, when scoping a refactor, or for PR review. Best for wide / cross-file / cross-repo impact; if a single obvious grep string would find the callers, grep is cheaper. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced. The 'seed' param selects what to blast: seed=symbol (default) fans out from node_id/symbol (resolved via eng_find_symbol); seed=dirty blasts every symbol in the staging overlay ('what am I about to break with my current uncommitted edits?'); seed=diff blasts every symbol in files changed by a git diff (working tree vs HEAD by default, or pass ref_a+ref_b together for a ref range like main..HEAD).
+
+_Reads through the staging overlay (reflects uncommitted edits)._
 
 **Input schema:**
 
@@ -420,13 +458,30 @@ Compute the blast radius (callers/callees/both) of a symbol - 'if I change this,
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "seed": {
+      "type": "string",
+      "enum": [
+        "symbol",
+        "dirty",
+        "diff"
+      ],
+      "description": "Seed mode: 'symbol' (default) fans out from node_id/symbol; 'dirty' from the staged (uncommitted) overlay; 'diff' from a git diff (working tree vs HEAD, or ref_a..ref_b)."
+    },
     "node_id": {
       "type": "string",
-      "description": "node_id to fan out from. Use eng_find_symbol to obtain one. Mutually exclusive with symbol."
+      "description": "seed=symbol: node_id to fan out from. Use eng_find_symbol to obtain one. Mutually exclusive with symbol."
     },
     "symbol": {
       "type": "string",
-      "description": "Symbol name to fan out from (parity with eng_get_call_chain). Ambiguous matches are rejected; pass node_id to disambiguate."
+      "description": "seed=symbol: symbol name to fan out from (parity with eng_get_call_chain). Ambiguous matches are rejected; pass node_id to disambiguate."
+    },
+    "ref_a": {
+      "type": "string",
+      "description": "seed=diff: base git ref (e.g. 'main', 'HEAD~5', a SHA). Must be paired with ref_b; omit both to diff the working tree against HEAD."
+    },
+    "ref_b": {
+      "type": "string",
+      "description": "seed=diff: target git ref. Must be paired with ref_a."
     },
     "repo_id": {
       "type": "string"
@@ -541,7 +596,7 @@ Return effective daemon configuration (secrets redacted).
 
 ## `eng_get_context_pack`
 
-Bundle a symbol's neighborhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response. Pass exactly one of node_id, symbol, or task_id as the anchor.
+Bundle a symbol's neighborhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response. Token budget: the full pack runs up to ~8k tokens; if you only need 'what does X directly call', pass scope=focused for the seed + direct callees alone (much cheaper). Reserve the default scope=full for genuine understand-before-edit moments, not narrow lookups. Pass exactly one of node_id, symbol, or task_id as the anchor.
 
 **Input schema:**
 
@@ -570,6 +625,14 @@ Bundle a symbol's neighborhood (callers, callees, adjacent tests, recent commits
       "type": "string",
       "description": "Task to derive the anchor symbol from. Mutually exclusive with node_id and symbol."
     },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "focused",
+        "full"
+      ],
+      "description": "Neighborhood width. 'focused' = seed + direct callees only (one hop, cheapest); use for a narrow 'what does X directly call' question. 'full' (default) = callers + callees at default depth; use for understand-before-edit. Pick 'focused' to save tokens when you don't need the whole neighborhood."
+    },
     "cwd": {
       "type": "string",
       "description": "Working directory used to resolve the active repo when repo_id is omitted."
@@ -596,116 +659,6 @@ _Reads through the staging overlay (reflects uncommitted edits)._
     "cwd": {
       "type": "string",
       "description": "Working directory to match against registered repo roots; if omitted the daemon uses the connecting client's reported cwd."
-    }
-  }
-}
-```
-
-
-## `eng_get_diff_blast_radius`
-
-Blast radius across every symbol in files changed by a git diff. By default the diff is the working tree vs HEAD; supply ref_a and ref_b together to blast a ref range (e.g. main..HEAD) instead. Use for PR review or 'what does this branch touch?' - the seed is the diff, not a single node.
-
-**Input schema:**
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Blast radius of a git diff. With ref_a and ref_b both set, diffs that ref range; with both omitted, diffs the working tree against HEAD. ref_a and ref_b must be supplied together.",
-  "properties": {
-    "repo_id": {
-      "type": "string"
-    },
-    "branch": {
-      "type": "string"
-    },
-    "ref_a": {
-      "type": "string",
-      "description": "Base git ref (e.g. 'main', 'HEAD~5', a SHA). Must be paired with ref_b; omit both to diff the working tree against HEAD."
-    },
-    "ref_b": {
-      "type": "string",
-      "description": "Target git ref. Must be paired with ref_a."
-    },
-    "max_depth": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "max_nodes": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "direction": {
-      "type": "string",
-      "enum": [
-        "in",
-        "out",
-        "both",
-        "callers",
-        "callees"
-      ],
-      "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."
-    },
-    "expand_cross_repo": {
-      "type": "boolean"
-    },
-    "cwd": {
-      "type": "string",
-      "description": "Working directory used to resolve the active repo when repo_id is omitted."
-    }
-  }
-}
-```
-
-
-## `eng_get_dirty_blast_radius`
-
-Blast radius across every symbol currently in the staging overlay (mid-edit, pre-commit). Use during an active session to answer 'what am I about to break with my current edits?' without committing first. Unchanged-but-restaged symbols are filtered via content-hash compare so a comment-only edit doesn't dirty the whole file.
-
-_Reads through the staging overlay (reflects uncommitted edits)._
-
-**Input schema:**
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "description": "Blast radius of currently-staged (uncommitted) changes.",
-  "properties": {
-    "repo_id": {
-      "type": "string"
-    },
-    "branch": {
-      "type": "string"
-    },
-    "max_depth": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "max_nodes": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "direction": {
-      "type": "string",
-      "enum": [
-        "in",
-        "out",
-        "both",
-        "callers",
-        "callees"
-      ],
-      "description": "'callers'/'in' (inbound, default), 'callees'/'out' (outbound), or 'both'. in==callers, out==callees."
-    },
-    "expand_cross_repo": {
-      "type": "boolean"
-    },
-    "cwd": {
-      "type": "string",
-      "description": "Working directory used to resolve the active repo when repo_id is omitted."
     }
   }
 }
@@ -948,6 +901,48 @@ Get a single suppression by suppression_id.
   "required": [
     "suppression_id"
   ]
+}
+```
+
+
+## `eng_get_type_hierarchy`
+
+Walk the type hierarchy (IMPLEMENTS + EMBEDS edges) around a type, both directions, depth-bounded. Use to see what a type embeds, what embeds it, and which interfaces sit above or below it in one query. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity rejected).
+
+**Input schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Returns the IMPLEMENTS + EMBEDS neighborhood of a type, both directions, depth-bounded. One of node_id or symbol is required.",
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "description": "Resolve directly by node_id."
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Type or interface name; resolved against repo_id+branch (ambiguity rejected)."
+    },
+    "repo_id": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Traversal depth (default 3, max 10)."
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory used to resolve the active repo when repo_id is omitted."
+    }
+  }
 }
 ```
 
@@ -1234,7 +1229,7 @@ Reopen a previously closed finding by ID.
 
 ## `eng_search_semantic`
 
-Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallback when the embedder is offline). Best for behavior-shaped queries ('where do we validate session tokens'). Returns inline snippets so a follow-up Read is usually unnecessary. For known identifiers prefer eng_find_symbol (exact + deterministic); for 'what does this reach / who calls this' escalate to eng_get_call_chain / eng_get_blast_radius. With repo_id omitted (and cwd outside any registered repo) the query fanned out across every registered repo in parallel and is fused with a single GLOBAL RRF so a top hit in one repo competes fairly with a top hit in another; each result then carries 'repo_id' so callers can disambiguate. The returned score is intra-query RRF (~0.01–0.03 typical range); use rank, not absolute score, to compare hits.
+Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallback when the embedder is offline). RESERVE this for true unknown-name / behavior-shaped queries ('where do we validate session tokens'). If you already know the identifier or an exact string, do NOT use this - use eng_find_symbol (exact + deterministic) or grep; semantic search is weaker and pricier on precise-logic queries. For 'what does this reach / who calls this' escalate to eng_get_call_chain / eng_get_blast_radius. Returns inline snippets so a follow-up Read is usually unnecessary. IMPORTANT - anti-spiral: if the response carries degraded_reason 'low_confidence' (the top hit landed in only one retriever, the precise-logic-miss signature), do NOT re-run the same query; switch tools (eng_find_symbol / grep for a known name) or rephrase substantially. Repeating a low-yield semantic query is the dominant cost failure. With repo_id omitted (and cwd outside any registered repo) the query fanned out across every registered repo in parallel and is fused with a single GLOBAL RRF so a top hit in one repo competes fairly with a top hit in another; each result then carries 'repo_id' so callers can disambiguate. The returned score is intra-query RRF (~0.01–0.03 typical range); use rank, not absolute score, to compare hits.
 
 **Input schema:**
 
@@ -1400,6 +1395,69 @@ Suppress a finding, inserting a record into the suppressions table.
     "finding_id",
     "reason"
   ]
+}
+```
+
+
+## `eng_trace_path`
+
+Trace how one symbol reaches another: returns the shortest path(s) from a source to a target over the chosen edge kinds (CALLS by default). Answers "does this handler ever reach that DB write" - the directed point-to-point question eng_get_call_chain (flood) and eng_get_blast_radius (closure) cannot. Pass from_node_id/from_symbol and to_node_id/to_symbol; include IMPLEMENTS in edge_kinds to hop interface to implementer. Empty paths with a reason means no route within the depth bound (not an error).
+
+**Input schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Returns the shortest path(s) by which a source symbol reaches a target symbol over the chosen edge kinds (CALLS by default). For each endpoint pass one of *_node_id or *_symbol; an ambiguous symbol is rejected (pass node_id). An empty paths list with a reason means no route within the depth bound (not an error).",
+  "properties": {
+    "from_node_id": {
+      "type": "string",
+      "description": "Source resolved directly by node_id."
+    },
+    "from_symbol": {
+      "type": "string",
+      "description": "Source symbol name; resolved against repo_id+branch (ambiguity rejected)."
+    },
+    "to_node_id": {
+      "type": "string",
+      "description": "Target resolved directly by node_id."
+    },
+    "to_symbol": {
+      "type": "string",
+      "description": "Target symbol name; resolved against repo_id+branch (ambiguity rejected)."
+    },
+    "edge_kinds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Edge kinds to traverse (default [\"CALLS\"]). Include IMPLEMENTS to hop interface->implementer, IMPORTS for package reachability."
+    },
+    "max_depth": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 25,
+      "description": "Max path length in edges (default 12, max 25)."
+    },
+    "max_paths": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 25,
+      "description": "Max distinct shortest paths to return (default 1)."
+    },
+    "repo_id": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory used to resolve the active repo when repo_id is omitted."
+    }
+  }
 }
 ```
 

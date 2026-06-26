@@ -270,8 +270,8 @@ func TestWire_RegistersGraphBlastSearchTools(t *testing.T) {
 	want := []string{
 		// graph
 		"eng_find_symbol", "eng_get_node", "eng_get_call_chain", "eng_get_file_nodes",
-		// blast
-		"eng_get_blast_radius", "eng_get_dirty_blast_radius", "eng_get_diff_blast_radius",
+		// blast (merged: seed=symbol|dirty|diff)
+		"eng_get_blast_radius",
 		// search
 		"eng_search_semantic", "eng_search_similar",
 	}
@@ -320,8 +320,9 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	// adds eng_find_clusters: 37 → 38.
 	// adds eng_find_implementations + eng_get_type_hierarchy (type hierarchy): 38 → 40.
 	// adds eng_trace_path (reachability): 40 → 41.
-	if got := len(names); got != 41 {
-		t.Errorf("registered tool count = %d; want 41; have=%v", got, names)
+	// merges eng_get_{dirty,diff}_blast_radius into eng_get_blast_radius (seed mode): 41 → 39.
+	if got := len(names); got != 39 {
+		t.Errorf("registered tool count = %d; want 39; have=%v", got, names)
 	}
 	// Negative-check: parked tools must NOT appear.
 	for _, parked := range []string{

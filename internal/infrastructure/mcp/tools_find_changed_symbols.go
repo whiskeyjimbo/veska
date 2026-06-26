@@ -27,7 +27,7 @@ const (
 func RegisterChangedSymbolsTool(r *Registry, svc *changedsymbols.Service, repoRoot RepoRootFunc, repos application.RepoLister) {
 	r.MustRegister(ToolSpec{
 		Name:            "eng_find_changed_symbols",
-		Description:     "Symbol-grain diff between two git refs - answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back. Pair with eng_get_diff_blast_radius for 'what's downstream of these changes'.",
+		Description:     "Symbol-grain diff between two git refs - answers 'which functions/methods/structs actually changed?' for PR review, blame, or 'why did this break since yesterday'. ref_a/ref_b (aliases base/head) default to HEAD~1..HEAD. Comment- or whitespace-only changes emit a 'non_symbol_changes_only' degraded_reason so callers know the file changed even when no symbol diff comes back. Pair with eng_get_blast_radius (seed=diff) for 'what's downstream of these changes'.",
 		IncludesStaging: false,
 		InputSchema:     findChangedSymbolsInputSchema,
 		Handler:         makeChangedSymbolsHandler(svc, repoRoot, repos),

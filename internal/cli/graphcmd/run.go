@@ -61,9 +61,9 @@ func RunCalls(ctx context.Context, p CallsParams) error {
 type BlastMode int
 
 const (
-	BlastSymbol BlastMode = iota // seed from Selector via eng_get_blast_radius
-	BlastDirty                   // staged overlay via eng_get_dirty_blast_radius
-	BlastDiff                    // working-tree vs HEAD via eng_get_diff_blast_radius
+	BlastSymbol BlastMode = iota // seed=symbol via eng_get_blast_radius
+	BlastDirty                   // seed=dirty (staged overlay)
+	BlastDiff                    // seed=diff (working-tree vs HEAD, or ref range)
 )
 
 // BlastParams bundles the inputs of RunBlast.
@@ -81,19 +81,18 @@ type BlastParams struct {
 	Out       io.Writer
 }
 
-// RunBlast wraps the blast-radius tool family. The seed mode picks the tool;
-// eng_get_dirty_blast_radius and eng_get_diff_blast_radius take no selector
-// (the staged overlay / working-tree diff IS the seed set) and resolve the
-// repo from repo_id or the connecting client's cwd, exactly like the
-// single-symbol path.
+// RunBlast wraps the merged eng_get_blast_radius tool. The seed mode maps to
+// the tool's 'seed' param: seed=dirty/diff take no selector (the staged overlay
+// / working-tree diff IS the seed set) and resolve the repo from repo_id or the
+// connecting client's cwd, exactly like the single-symbol path.
 func RunBlast(ctx context.Context, p BlastParams) error {
+	const tool = "eng_get_blast_radius"
 	var params map[string]any
-	var tool string
 	switch p.Mode {
 	case BlastDirty:
-		params, tool = map[string]any{}, "eng_get_dirty_blast_radius"
+		params = map[string]any{"seed": "dirty"}
 	case BlastDiff:
-		params, tool = map[string]any{}, "eng_get_diff_blast_radius"
+		params = map[string]any{"seed": "diff"}
 		// ref_a/ref_b are all-or-nothing at the tool boundary; the Cobra
 		// layer guarantees both are set together (or both empty for the
 		// working-tree default).
@@ -104,7 +103,7 @@ func RunBlast(ctx context.Context, p BlastParams) error {
 			params["ref_b"] = p.RefB
 		}
 	default:
-		params, tool = selectorParams(p.Selector), "eng_get_blast_radius"
+		params = selectorParams(p.Selector)
 	}
 	if p.RepoID != "" {
 		params["repo_id"] = p.RepoID

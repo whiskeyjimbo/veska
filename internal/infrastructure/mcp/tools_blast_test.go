@@ -59,6 +59,10 @@ func (f *blastFakeNodes) NodesInFile(_ context.Context, _, _, filePath string) (
 
 func dispatchBlast(t *testing.T, r *Registry, method string, params any) (BlastResponse, *RPCError) {
 	t.Helper()
+	// The three former blast tools merged into eng_get_blast_radius with a seed
+	// param. Translate the legacy method names here so the existing per-seed test
+	// bodies exercise the merged tool unchanged.
+	method, params = translateLegacyBlast(method, params)
 	raw, err := json.Marshal(params)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -77,6 +81,31 @@ func dispatchBlast(t *testing.T, r *Registry, method string, params any) (BlastR
 		t.Fatalf("unmarshal: %v", err)
 	}
 	return resp, nil
+}
+
+// translateLegacyBlast maps a legacy blast tool name + params onto the merged
+// eng_get_blast_radius call by injecting the corresponding seed. params that are
+// not a map[string]any are passed through (used for malformed-input tests).
+func translateLegacyBlast(method string, params any) (string, any) {
+	var seed string
+	switch method {
+	case "eng_get_dirty_blast_radius":
+		seed = "dirty"
+	case "eng_get_diff_blast_radius":
+		seed = "diff"
+	default:
+		return method, params
+	}
+	m, ok := params.(map[string]any)
+	if !ok {
+		return "eng_get_blast_radius", params
+	}
+	out := make(map[string]any, len(m)+1)
+	for k, v := range m {
+		out[k] = v
+	}
+	out["seed"] = seed
+	return "eng_get_blast_radius", out
 }
 
 func TestBlastRadius_DefaultsToCallers(t *testing.T) {
@@ -276,7 +305,7 @@ func TestDirtyBlastRadius_FlagsIncludedStaging(t *testing.T) {
 	}
 }
 
-func TestBlastTools_RegistersThreeTools(t *testing.T) {
+func TestBlastTools_RegistersOneMergedTool(t *testing.T) {
 	svc, err := blastradius.NewService(&blastFakeEdges{}, &blastFakeNodes{}, nil)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
@@ -284,7 +313,7 @@ func TestBlastTools_RegistersThreeTools(t *testing.T) {
 	r := NewRegistry()
 	RegisterBlastTools(r, svc, nil, nil, nil, nil)
 	got := r.Names()
-	want := []string{"eng_get_blast_radius", "eng_get_diff_blast_radius", "eng_get_dirty_blast_radius"}
+	want := []string{"eng_get_blast_radius"}
 	if len(got) != len(want) {
 		t.Fatalf("got %d want %d (%v)", len(got), len(want), got)
 	}

@@ -26,7 +26,7 @@ func TestCLILongMatchesMCPDescription_Calls(t *testing.T) {
 
 // TestCLILongMatchesMCPDescription_Blast pins: the `veska
 // blast` Long help string must reuse the MCP eng_get_blast_radius
-// description verbatim and reference the diff/dirty variants and the
+// description verbatim and reference the seed modes (diff/dirty) and the
 // cross-repo fan-out behavior.
 func TestCLILongMatchesMCPDescription_Blast(t *testing.T) {
 	cmd := blastCmd()
@@ -34,8 +34,8 @@ func TestCLILongMatchesMCPDescription_Blast(t *testing.T) {
 		t.Fatalf("blast Long mismatch:\n want=%q\n  got=%q", mcpinfra.DescBlastRadius, cmd.Long)
 	}
 	for _, want := range []string{
-		"eng_get_diff_blast_radius",
-		"eng_get_dirty_blast_radius",
+		"seed=diff",
+		"seed=dirty",
 		"cross_repo_edges",
 	} {
 		if !strings.Contains(cmd.Long, want) {

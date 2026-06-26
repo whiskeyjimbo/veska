@@ -58,10 +58,9 @@ func callsCmd() *cobra.Command {
 	return cmd
 }
 
-// blastCmd wraps the blast-radius tool family. A single symbol seed is the
-// default; --dirty seeds from the staged overlay (eng_get_dirty_blast_radius)
-// and --diff from the working-tree-vs-HEAD diff (eng_get_diff_blast_radius).
-// parity wrapper; --dirty/--diff added in.
+// blastCmd wraps the merged eng_get_blast_radius tool. A single symbol seed is
+// the default; --dirty maps to seed=dirty (staged overlay) and --diff to
+// seed=diff (working-tree-vs-HEAD, or a ref range).
 func blastCmd() *cobra.Command {
 	var (
 		repoFlag string

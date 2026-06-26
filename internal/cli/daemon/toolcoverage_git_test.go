@@ -4,7 +4,7 @@ package daemon
 
 // Shared git-fixture helpers for TestToolCoverage rows whose tools diff or
 // inspect real git history (eng_find_changed_symbols, eng_promote_repo,
-// eng_get_diff_blast_radius, eng_get_dirty_blast_radius, eng_get_hot_zones).
+// eng_get_blast_radius seed=diff/dirty, eng_get_hot_zones).
 // The committed testdata fixtures live inside the veska repo, so their git
 // state is non-deterministic. These helpers build a throwaway repo with a
 // fixed identity, fixed default branch, and fixed author/committer dates so

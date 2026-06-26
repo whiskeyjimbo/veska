@@ -83,7 +83,7 @@ veska backup verify <path> [flags]
 
 Compute blast radius for a symbol, or --dirty/--diff for staged/working-tree/ranged changes
 
-Compute the blast radius (callers/callees/both) of a symbol - 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, or when scoping a refactor. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced. Pass node_id (exact) or symbol (resolved via eng_find_symbol). For working-tree changes use eng_get_diff_blast_radius; for in-progress staged edits use eng_get_dirty_blast_radius.
+Compute the blast radius (callers/callees/both) - 'if I change this, what breaks?' or 'what does this transitively reach?'. Use BEFORE editing an exported symbol, when scoping a refactor, or for PR review. Best for wide / cross-file / cross-repo impact; if a single obvious grep string would find the callers, grep is cheaper. Walks cross_repo_edges in both directions so a library symbol's consumers in workspace repos are surfaced. The 'seed' param selects what to blast: seed=symbol (default) fans out from node_id/symbol (resolved via eng_find_symbol); seed=dirty blasts every symbol in the staging overlay ('what am I about to break with my current uncommitted edits?'); seed=diff blasts every symbol in files changed by a git diff (working tree vs HEAD by default, or pass ref_a+ref_b together for a ref range like main..HEAD).
 
 ```
 veska blast [<symbol-or-node-id> | --diff [<ref_a>..<ref_b>]] [flags]
@@ -339,7 +339,7 @@ veska config show [flags]
 
 Bundle a symbol with its callers/callees/tests (wraps eng_get_context_pack)
 
-Bundle a symbol's neighborhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response.
+Bundle a symbol's neighborhood (callers, callees, adjacent tests, recent commits, open findings, active task) into one token-bounded payload. Use at the START of a non-trivial change so you don't have to assemble surrounding context piecewise. Surfaces cross_repo_edges in both directions, so cross-repo callers/callees show up in the same response. Token budget: the full pack runs up to ~8k tokens; if you only need 'what does X directly call', pass scope=focused for the seed + direct callees alone (much cheaper). Reserve the default scope=full for genuine understand-before-edit moments, not narrow lookups.
 
 ```
 veska context <symbol> [flags]
@@ -350,6 +350,7 @@ veska context <symbol> [flags]
 ```
       --json            emit JSON (eng_get_context_pack shape)
       --repo string     repo id or short_id (default: the sole registered repo)
+      --scope string    neighborhood width: 'focused' (seed + direct callees) or 'full' (default)
       --symbol string   symbol name (alternative to the positional arg)
 ```
 
@@ -1483,7 +1484,7 @@ veska savings [flags]
 
 Semantic search; optionally clone+index a repo first
 
-Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallback when the embedder is offline). Best for behavior-shaped queries ('where do we validate session tokens'). Returns inline snippets so a follow-up Read is usually unnecessary. For known identifiers prefer eng_find_symbol (exact + deterministic); for 'what does this reach / who calls this' escalate to eng_get_call_chain / eng_get_blast_radius. With repo_id omitted (and cwd outside any registered repo) the query fanned out across every registered repo in parallel and is fused with a single GLOBAL RRF so a top hit in one repo competes fairly with a top hit in another; each result then carries 'repo_id' so callers can disambiguate. The returned score is intra-query RRF (~0.01–0.03 typical range); use rank, not absolute score, to compare hits.
+Natural-language search over embedded symbols (RRF-fused with FTS, lexical fallback when the embedder is offline). RESERVE this for true unknown-name / behavior-shaped queries ('where do we validate session tokens'). If you already know the identifier or an exact string, do NOT use this - use eng_find_symbol (exact + deterministic) or grep; semantic search is weaker and pricier on precise-logic queries. For 'what does this reach / who calls this' escalate to eng_get_call_chain / eng_get_blast_radius. Returns inline snippets so a follow-up Read is usually unnecessary. IMPORTANT - anti-spiral: if the response carries degraded_reason 'low_confidence' (the top hit landed in only one retriever, the precise-logic-miss signature), do NOT re-run the same query; switch tools (eng_find_symbol / grep for a known name) or rephrase substantially. Repeating a low-yield semantic query is the dominant cost failure. With repo_id omitted (and cwd outside any registered repo) the query fanned out across every registered repo in parallel and is fused with a single GLOBAL RRF so a top hit in one repo competes fairly with a top hit in another; each result then carries 'repo_id' so callers can disambiguate. The returned score is intra-query RRF (~0.01–0.03 typical range); use rank, not absolute score, to compare hits.
 
 The optional second argument (or --repo flag) selects the repo to search:
   - omitted        - auto-detect from cwd (must be a registered repo)
