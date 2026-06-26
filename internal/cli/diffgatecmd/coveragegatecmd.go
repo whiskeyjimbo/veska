@@ -60,6 +60,7 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 		return err
 	}
 	p.RepoID = resolved
+	p.Branch = resolveBranch(ctx, pools.ReadDB, p.RepoID, p.Branch)
 
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		rep := untestedReport{

@@ -48,6 +48,13 @@ func RunSecurity(ctx context.Context, p SecurityParams) error {
 	if p.RepoID == "" || p.BaseRef == "" || p.CandidateRef == "" {
 		return fmt.Errorf("diff-gate security: --repo, --base-ref and --candidate-ref are required")
 	}
+	// Security scans the diff's added lines, not the branch-scoped graph, so it
+	// has no branch footgun; the (label-only) branch defaults to "main" when the
+	// flag is left empty - keeping the emitted finding's branch non-empty without
+	// needing the registry db this gate deliberately avoids.
+	if p.Branch == "" {
+		p.Branch = "main"
+	}
 
 	cfg, err := config.Load()
 	if err != nil {

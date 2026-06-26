@@ -65,6 +65,7 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 		return err
 	}
 	p.RepoID = resolved
+	p.Branch = resolveBranch(ctx, pools.ReadDB, p.RepoID, p.Branch)
 
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		rep := apiGateReport{

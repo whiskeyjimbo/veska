@@ -86,6 +86,7 @@ func Run(ctx context.Context, p Params) error {
 		return err
 	}
 	p.RepoID = resolved
+	p.Branch = resolveBranch(ctx, pools.ReadDB, p.RepoID, p.Branch)
 
 	base := baseGraph{
 		EdgeReaderRepo: sqlite.NewEdgeReaderRepo(pools.ReadDB),
@@ -210,6 +211,24 @@ func emitVerdict(out io.Writer, v diffgate.GateVerdict) error {
 		return fmt.Errorf("diff-gate: encode verdict: %w", err)
 	}
 	return nil
+}
+
+// resolveBranch returns branchFlag when explicitly set, otherwise the repo's
+// ACTIVE (indexed) branch from the registry, falling back to "main". This fixes
+// the footgun where --branch defaulted to "main" while the indexed graph was on
+// a different active branch: the branch-scoped base queries then returned empty,
+// silently producing wrong gate verdicts (a tested symbol read as untested, a
+// caller-less impact, etc.). Callers pass the already-resolved (canonical)
+// repo_id. Failing open to "main" preserves the prior behavior on lookup errors.
+func resolveBranch(ctx context.Context, db *sql.DB, repoID, branchFlag string) string {
+	if branchFlag != "" {
+		return branchFlag
+	}
+	_, branch, err := repocmd.LookupRepoRootAndBranch(ctx, db, repoID)
+	if err != nil || branch == "" {
+		return "main"
+	}
+	return branch
 }
 
 // resolveRepoID maps the --repo flag to the canonical full repo_id: an exact id

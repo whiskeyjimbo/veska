@@ -66,6 +66,7 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 		return err
 	}
 	p.RepoID = resolved
+	p.Branch = resolveBranch(ctx, pools.ReadDB, p.RepoID, p.Branch)
 
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		rep := cycleGateReport{

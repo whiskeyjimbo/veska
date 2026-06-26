@@ -57,6 +57,7 @@ func RunClones(ctx context.Context, p CloneParams) error {
 		return err
 	}
 	p.RepoID = resolved
+	p.Branch = resolveBranch(ctx, pools.ReadDB, p.RepoID, p.Branch)
 
 	// Fail closed with a clean verdict when the repo isn't indexed.
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {

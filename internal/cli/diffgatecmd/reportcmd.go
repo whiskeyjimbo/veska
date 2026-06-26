@@ -56,6 +56,7 @@ func RunReport(ctx context.Context, p ReportParams) error {
 		return err
 	}
 	p.RepoID = resolved
+	p.Branch = resolveBranch(ctx, pools.ReadDB, p.RepoID, p.Branch)
 
 	report := diffgate.PRReport{
 		RepoID:       p.RepoID,

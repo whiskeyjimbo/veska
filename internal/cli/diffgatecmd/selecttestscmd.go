@@ -93,6 +93,7 @@ func RunSelectTests(ctx context.Context, p SelectTestsParams) error {
 		return err
 	}
 	p.RepoID = resolved
+	p.Branch = resolveBranch(ctx, pools.ReadDB, p.RepoID, p.Branch)
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		// Advisory, not fatal: emit an empty selection + reason at exit 0 so the
 		// "always exits 0, emits JSON" contract holds. The reason
