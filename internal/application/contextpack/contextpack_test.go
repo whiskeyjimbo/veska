@@ -121,7 +121,7 @@ func newAssembler(t *testing.T, opts ...contextpack.Option) *contextpack.Assembl
 // AC1 - symbol mode.
 func TestForSymbol_BundlesAllSections(t *testing.T) {
 	a := newAssembler(t)
-	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
+	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target", contextpack.PackOptions{})
 	if err != nil {
 		t.Fatalf("ForSymbol: %v", err)
 	}
@@ -142,10 +142,63 @@ func TestForSymbol_BundlesAllSections(t *testing.T) {
 	}
 }
 
+// ScopeFocused narrows the pack to the seed plus direct callees only, so the
+// inbound caller1 (a caller, not a callee) is excluded - the token-saving path
+// for a narrow "what does X directly call" question.
+func TestForSymbol_ScopeFocused_DropsCallers(t *testing.T) {
+	a := newAssembler(t)
+	full, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target", contextpack.PackOptions{Scope: contextpack.ScopeFull})
+	if err != nil {
+		t.Fatalf("ForSymbol full: %v", err)
+	}
+	if len(full.Nodes) != 2 {
+		t.Fatalf("full scope: want seed+caller, got %d: %+v", len(full.Nodes), full.Nodes)
+	}
+	focused, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target", contextpack.PackOptions{Scope: contextpack.ScopeFocused})
+	if err != nil {
+		t.Fatalf("ForSymbol focused: %v", err)
+	}
+	// The fixture's seed has an inbound caller but no outbound callee, so a
+	// callees-only walk returns just the seed.
+	if len(focused.Nodes) != 1 || !focused.Nodes[0].Seed {
+		t.Fatalf("focused scope: want seed only, got %d: %+v", len(focused.Nodes), focused.Nodes)
+	}
+	if focused.Scope != string(contextpack.ScopeFocused) {
+		t.Fatalf("focused scope echo: got %q", focused.Scope)
+	}
+	if full.Scope != string(contextpack.ScopeFull) {
+		t.Fatalf("full scope echo: got %q", full.Scope)
+	}
+}
+
+func TestParseScope(t *testing.T) {
+	cases := map[string]struct {
+		want contextpack.Scope
+		err  bool
+	}{
+		"":        {contextpack.ScopeFull, false},
+		"full":    {contextpack.ScopeFull, false},
+		"focused": {contextpack.ScopeFocused, false},
+		"bogus":   {"", true},
+	}
+	for in, c := range cases {
+		got, err := contextpack.ParseScope(in)
+		if c.err {
+			if err == nil {
+				t.Fatalf("ParseScope(%q): want error", in)
+			}
+			continue
+		}
+		if err != nil || got != c.want {
+			t.Fatalf("ParseScope(%q) = %q, %v; want %q", in, got, err, c.want)
+		}
+	}
+}
+
 // AC1 - task mode.
 func TestForTask_BundlesFromChangedFiles(t *testing.T) {
 	a := newAssembler(t)
-	p, err := a.ForTask(context.Background(), "r", "main", "/repo", "t1")
+	p, err := a.ForTask(context.Background(), "r", "main", "/repo", "t1", contextpack.PackOptions{})
 	if err != nil {
 		t.Fatalf("ForTask: %v", err)
 	}
@@ -161,7 +214,7 @@ func TestForTask_BundlesFromChangedFiles(t *testing.T) {
 // AC2 - oversized bundle truncated, not rejected.
 func TestClip_TruncatesOversizedBundle(t *testing.T) {
 	a := newAssembler(t, contextpack.WithTokenBudget(1))
-	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
+	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target", contextpack.PackOptions{})
 	if err != nil {
 		t.Fatalf("ForSymbol: %v", err)
 	}
@@ -176,7 +229,7 @@ func TestClip_TruncatesOversizedBundle(t *testing.T) {
 
 func TestClip_WithinBudgetNotTruncated(t *testing.T) {
 	a := newAssembler(t, contextpack.WithTokenBudget(contextpack.DefaultTokenBudget))
-	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
+	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target", contextpack.PackOptions{})
 	if err != nil {
 		t.Fatalf("ForSymbol: %v", err)
 	}
@@ -202,7 +255,7 @@ func TestForSymbol_P95Latency(t *testing.T) {
 	durs := make([]time.Duration, iter)
 	for i := range durs {
 		start := time.Now()
-		if _, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target"); err != nil {
+		if _, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target", contextpack.PackOptions{}); err != nil {
 			t.Fatalf("ForSymbol: %v", err)
 		}
 		durs[i] = time.Since(start)
@@ -259,7 +312,7 @@ func TestForSymbol_IncludesSnippets(t *testing.T) {
 		NodesInFile:  nodes.NodesInFile,
 		ActiveTask:   func(_ context.Context, _ string) (*contextpack.TaskInfo, error) { return nil, nil },
 	})
-	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
+	p, err := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target", contextpack.PackOptions{})
 	if err != nil {
 		t.Fatalf("ForSymbol: %v", err)
 	}
@@ -302,7 +355,7 @@ func TestForSymbol_SnippetTrimmedToBudget(t *testing.T) {
 		NodesInFile:  nodes.NodesInFile,
 		ActiveTask:   func(_ context.Context, _ string) (*contextpack.TaskInfo, error) { return nil, nil },
 	})
-	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Big")
+	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Big", contextpack.PackOptions{})
 	if len(p.Nodes) != 1 {
 		t.Fatalf("want 1 node, got %d", len(p.Nodes))
 	}
@@ -321,7 +374,7 @@ func TestNodeName_IsCanonicalSymbolPath(t *testing.T) {
 	// of the MCP surface emits (e.g. "Server.Start", not the leaf "Start"),
 	// and expose file_path rather than the old "path" key.
 	a := newAssembler(t)
-	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target")
+	p, _ := a.ForSymbol(context.Background(), "r", "main", "/repo", "Target", contextpack.PackOptions{})
 	if len(p.Nodes) == 0 {
 		t.Fatal("expected at least one node")
 	}

@@ -285,6 +285,7 @@ var contextPackInputSchema = json.RawMessage(`{
     "node_id": {"type": "string", "description": "Node to anchor on. Mutually exclusive with symbol and task_id."},
     "symbol":  {"type": "string", "description": "Symbol to anchor on. Mutually exclusive with node_id and task_id."},
     "task_id": {"type": "string", "description": "Task to derive the anchor symbol from. Mutually exclusive with node_id and symbol."},
+    "scope":   {"type": "string", "enum": ["focused", "full"], "description": "Neighborhood width. 'focused' = seed + direct callees only (one hop, cheapest); use for a narrow 'what does X directly call' question. 'full' (default) = callers + callees at default depth; use for understand-before-edit. Pick 'focused' to save tokens when you don't need the whole neighborhood."},
     "cwd":     {"type": "string", "description": "Working directory used to resolve the active repo when repo_id is omitted."}
   }
 }`)

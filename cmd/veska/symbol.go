@@ -64,6 +64,7 @@ func contextCmd() *cobra.Command {
 		repoFlag   string
 		jsonOut    bool
 		symbolFlag string
+		scopeFlag  string
 	)
 	cmd := &cobra.Command{
 		Use:   "context <symbol>",
@@ -88,6 +89,7 @@ func contextCmd() *cobra.Command {
 			return symbolcmd.RunContext(cmd.Context(), symbolcmd.ContextParams{
 				Symbol:  sym,
 				RepoID:  repoFlag,
+				Scope:   scopeFlag,
 				JSONOut: jsonOut,
 				Out:     cmd.OutOrStdout(),
 			})
@@ -96,6 +98,7 @@ func contextCmd() *cobra.Command {
 	cmd.Flags().StringVar(&repoFlag, "repo", "", "repo id or short_id (default: the sole registered repo)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (eng_get_context_pack shape)")
 	cmd.Flags().StringVar(&symbolFlag, "symbol", "", "symbol name (alternative to the positional arg)")
+	cmd.Flags().StringVar(&scopeFlag, "scope", "", "neighborhood width: 'focused' (seed + direct callees) or 'full' (default)")
 	return cmd
 }
 

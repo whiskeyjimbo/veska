@@ -77,6 +77,10 @@ type contextPackParams struct {
 	NodeID string `json:"node_id,omitempty"`
 	Symbol string `json:"symbol,omitempty"`
 	TaskID string `json:"task_id,omitempty"`
+	// Scope bounds the neighborhood width: "focused" returns the seed plus its
+	// direct callees only (cheapest), "full" (default) returns both directions
+	// at default depth. See contextpack.Scope for the token-budget rationale.
+	Scope string `json:"scope,omitempty"`
 }
 
 func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, repos application.RepoLister, resolve ResolveFunc, resolveInbound InboundResolveFunc, scans ScanTrackerReader, reconcile ReconcileReader) ToolHandler {
@@ -108,6 +112,11 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 				Message: "exactly one of node_id, symbol or task_id is required",
 			}
 		}
+		scope, err := contextpack.ParseScope(p.Scope)
+		if err != nil {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: err.Error()}
+		}
+		packOpts := contextpack.PackOptions{Scope: scope}
 		// If repo_id is omitted for a symbol, all registered repositories are queried to automatically resolve the repository when the symbol is unambiguous.
 		if p.Symbol != "" && p.RepoID == "" {
 			chosen, rpcErr := pickRepoForSymbol(ctx, asm, repoRoot, repos, raw, p.Symbol, p.Branch)
@@ -140,11 +149,11 @@ func makeContextPackHandler(asm *contextpack.Assembler, repoRoot RepoRootFunc, r
 		var pack contextpack.Pack
 		switch {
 		case p.NodeID != "":
-			pack, err = asm.ForNode(ctx, p.RepoID, p.Branch, root, p.NodeID)
+			pack, err = asm.ForNode(ctx, p.RepoID, p.Branch, root, p.NodeID, packOpts)
 		case p.Symbol != "":
-			pack, err = asm.ForSymbol(ctx, p.RepoID, p.Branch, root, p.Symbol)
+			pack, err = asm.ForSymbol(ctx, p.RepoID, p.Branch, root, p.Symbol, packOpts)
 		default:
-			pack, err = asm.ForTask(ctx, p.RepoID, p.Branch, root, p.TaskID)
+			pack, err = asm.ForTask(ctx, p.RepoID, p.Branch, root, p.TaskID, packOpts)
 		}
 		if err != nil {
 			return nil, &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("context pack: %v", err)}
@@ -233,7 +242,9 @@ func pickRepoForSymbol(ctx context.Context, asm *contextpack.Assembler, repoRoot
 		if err != nil || root == "" {
 			continue
 		}
-		pack, perr := asm.ForSymbol(ctx, t.RepoID, t.Branch, root, symbol)
+		// Disambiguation only needs to know whether the symbol resolves in
+		// this repo, so the default scope is fine here.
+		pack, perr := asm.ForSymbol(ctx, t.RepoID, t.Branch, root, symbol, contextpack.PackOptions{})
 		if perr != nil {
 			continue
 		}

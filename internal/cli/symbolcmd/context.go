@@ -16,6 +16,7 @@ import (
 type ContextParams struct {
 	Symbol  string
 	RepoID  string // explicit --repo; empty means daemon fan-out
+	Scope   string // "" (full, default) or "focused"; mirrors the MCP scope param
 	JSONOut bool
 	Out     io.Writer
 }
@@ -50,6 +51,9 @@ func RunContext(ctx context.Context, p ContextParams) error {
 	params := map[string]any{"symbol": p.Symbol}
 	if p.RepoID != "" {
 		params["repo_id"] = p.RepoID
+	}
+	if p.Scope != "" {
+		params["scope"] = p.Scope
 	}
 	// omit repo_id so the daemon fans out by default - the common
 	// cobra-CLI-plus-shared-lib pattern wants `veska context Greeter.Hello`

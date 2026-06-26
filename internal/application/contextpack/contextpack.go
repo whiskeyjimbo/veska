@@ -22,6 +22,62 @@ var ErrMissingDependency = errors.New("contextpack: missing required dependency"
 // DefaultTokenBudget is the default token limit for context packs to fit comfortably in LLM context windows.
 const DefaultTokenBudget = 8192
 
+// Scope selects how wide a neighborhood the pack assembles around the seed.
+// It is the per-request token lever: a narrow "what does X directly call"
+// question pays for ScopeFocused (~one hop of callees), while a genuine
+// understand-before-edit moment pays for ScopeFull (both directions, default
+// depth) - the A/B bench (research/ab-bench) showed ScopeFull over-fetches by
+// ~47% on narrow questions, so the agent should pick the scope to match intent.
+type Scope string
+
+const (
+	// ScopeFull walks both callers and callees at the default depth. This is
+	// the default and preserves the historical pack shape.
+	ScopeFull Scope = "full"
+	// ScopeFocused walks only the seed plus its direct callees (one hop,
+	// outbound), the minimal answer to "what does this directly call".
+	ScopeFocused Scope = "focused"
+)
+
+// focusedMaxDepth bounds the focused scope to a single outbound hop.
+const focusedMaxDepth = 1
+
+// PackOptions are per-request knobs threaded into the assembler. Mirrors the
+// blastradius.Options arg-struct pattern rather than functional options, which
+// are reserved for the Assembler constructor.
+type PackOptions struct {
+	// Scope selects neighborhood width; empty defaults to ScopeFull.
+	Scope Scope
+}
+
+// ParseScope maps a tool-layer string to a Scope, defaulting empty to
+// ScopeFull and rejecting unknown values so the handler can surface a clear
+// InvalidParams error.
+func ParseScope(s string) (Scope, error) {
+	switch Scope(s) {
+	case "", ScopeFull:
+		return ScopeFull, nil
+	case ScopeFocused:
+		return ScopeFocused, nil
+	default:
+		return "", fmt.Errorf("contextpack: unknown scope %q (want %q or %q)", s, ScopeFocused, ScopeFull)
+	}
+}
+
+// blastOptionsFor maps a Scope onto the blast-radius traversal knobs. Full
+// keeps the historical both-directions default-depth walk; focused narrows to
+// a single outbound hop so the pack carries only the seed and its direct
+// callees.
+func blastOptionsFor(s Scope) blastradius.Options {
+	if s == ScopeFocused {
+		return blastradius.Options{
+			Direction: blastradius.DirCallees,
+			MaxDepth:  focusedMaxDepth,
+		}
+	}
+	return blastradius.Options{Direction: blastradius.DirBoth}
+}
+
 // PerNodeSnippetBytes guards against single large symbols consuming the entire
 // token budget before section-level clipping occurs.
 const PerNodeSnippetBytes = 1500
@@ -84,6 +140,9 @@ type Pack struct {
 	Branch string `json:"branch"`
 	Mode   string `json:"mode"`
 	Query  string `json:"query"`
+	// Scope echoes the neighborhood width used to build this pack so callers
+	// can tell a focused pack from a full one.
+	Scope string `json:"scope,omitempty"`
 	// Focus exposes the seed node directly.
 	Focus           *NodeInfo     `json:"focus,omitempty"`
 	Nodes           []NodeInfo    `json:"nodes"`
@@ -163,7 +222,7 @@ func NewAssembler(deps AssemblerDeps, opts ...Option) (*Assembler, error) {
 }
 
 // ForSymbol builds a context pack starting from a symbol name.
-func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, symbol string) (Pack, error) {
+func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, symbol string, opts PackOptions) (Pack, error) {
 	seeds, err := a.findNodes(ctx, repoID, branch, symbol)
 	if err != nil {
 		return Pack{}, fmt.Errorf("contextpack: find nodes: %w", err)
@@ -172,7 +231,7 @@ func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, sym
 	for _, n := range seeds {
 		seedIDs = append(seedIDs, string(n.ID))
 	}
-	pack, err := a.assemble(ctx, repoID, branch, repoRoot, seedIDs)
+	pack, err := a.assemble(ctx, repoID, branch, repoRoot, seedIDs, opts)
 	if err != nil {
 		return Pack{}, err
 	}
@@ -183,8 +242,8 @@ func (a *Assembler) ForSymbol(ctx context.Context, repoID, branch, repoRoot, sym
 }
 
 // ForNode builds a context pack from a node ID.
-func (a *Assembler) ForNode(ctx context.Context, repoID, branch, repoRoot, nodeID string) (Pack, error) {
-	pack, err := a.assemble(ctx, repoID, branch, repoRoot, []string{nodeID})
+func (a *Assembler) ForNode(ctx context.Context, repoID, branch, repoRoot, nodeID string, opts PackOptions) (Pack, error) {
+	pack, err := a.assemble(ctx, repoID, branch, repoRoot, []string{nodeID}, opts)
 	if err != nil {
 		return Pack{}, err
 	}
@@ -195,7 +254,7 @@ func (a *Assembler) ForNode(ctx context.Context, repoID, branch, repoRoot, nodeI
 }
 
 // ForTask builds a context pack for a task.
-func (a *Assembler) ForTask(ctx context.Context, repoID, branch, repoRoot, taskID string) (Pack, error) {
+func (a *Assembler) ForTask(ctx context.Context, repoID, branch, repoRoot, taskID string, opts PackOptions) (Pack, error) {
 	files, err := a.changedFiles(ctx, repoRoot)
 	if err != nil {
 		return Pack{}, fmt.Errorf("contextpack: changed files: %w", err)
@@ -215,7 +274,7 @@ func (a *Assembler) ForTask(ctx context.Context, repoID, branch, repoRoot, taskI
 		seedIDs = append(seedIDs, id)
 	}
 	sort.Strings(seedIDs)
-	pack, err := a.assemble(ctx, repoID, branch, repoRoot, seedIDs)
+	pack, err := a.assemble(ctx, repoID, branch, repoRoot, seedIDs, opts)
 	if err != nil {
 		return Pack{}, err
 	}
@@ -226,8 +285,12 @@ func (a *Assembler) ForTask(ctx context.Context, repoID, branch, repoRoot, taskI
 }
 
 // assemble constructs the un-clipped context pack.
-func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot string, seedIDs []string) (Pack, error) {
-	pack := Pack{RepoID: repoID, Branch: branch, TokenBudget: a.tokenBudget}
+func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot string, seedIDs []string, opts PackOptions) (Pack, error) {
+	scope := opts.Scope
+	if scope == "" {
+		scope = ScopeFull
+	}
+	pack := Pack{RepoID: repoID, Branch: branch, TokenBudget: a.tokenBudget, Scope: string(scope)}
 
 	seedSet := make(map[string]struct{}, len(seedIDs))
 	for _, id := range seedIDs {
@@ -236,9 +299,7 @@ func (a *Assembler) assemble(ctx context.Context, repoID, branch, repoRoot strin
 
 	var entries []blastradius.Entry
 	if len(seedIDs) > 0 {
-		resp, err := a.blast.Of(ctx, repoID, branch, seedIDs, blastradius.Options{
-			Direction: blastradius.DirBoth,
-		})
+		resp, err := a.blast.Of(ctx, repoID, branch, seedIDs, blastOptionsFor(scope))
 		if err != nil {
 			return Pack{}, fmt.Errorf("contextpack: blast radius: %w", err)
 		}
