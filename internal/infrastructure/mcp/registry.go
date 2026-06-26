@@ -23,6 +23,16 @@ const minDescriptionLen = 10
 // ToolHandler processes incoming tool requests, using the actor parameters to apply security, rate-limiting, or auditing policies.
 type ToolHandler func(ctx context.Context, actor domain.Actor, params json.RawMessage) (any, *RPCError)
 
+// Tool tiers gate which tools a given MCP profile exposes. Tier1 is the lean
+// default coding-agent surface (the evidence-earned Core); everything else is
+// Tier2 (opt-in, served only by the "full" profile). A zero Tier means
+// "unset" and is treated as Tier2, so a tool is in the agent surface only when
+// it explicitly opts in - keeping the default surface small by construction.
+const (
+	Tier1 = 1
+	Tier2 = 2
+)
+
 type ToolSpec struct {
 	Name            string
 	Description     string
@@ -30,6 +40,8 @@ type ToolSpec struct {
 	Handler         ToolHandler
 	InputSchema     json.RawMessage
 	OutputSchema    json.RawMessage
+	// Tier gates visibility by profile (see Tier1/Tier2). Zero => Tier2.
+	Tier int
 
 	// CLIExempt indicates that the tool is intentionally omitted from the CLI subcommands to prevent parity linter failures.
 	CLIExempt CLIExempt
@@ -70,10 +82,36 @@ func (c CLIExempt) String() string {
 type Registry struct {
 	tools map[string]ToolSpec
 	tp    observability.TracerProvider
+	// maxTier caps which tiers Register will accept; 0 means unlimited (full).
+	// It defaults to 0 so every test/linter that builds a bare registry sees
+	// the complete catalog unchanged; only the serving daemon narrows it.
+	maxTier int
 }
 
 func NewRegistry() *Registry {
 	return &Registry{tools: make(map[string]ToolSpec)}
+}
+
+// SetProfile narrows which tool tiers Register will accept. "agent" exposes only
+// the Tier1 Core; "full" (or empty) exposes everything. Call it before tools are
+// registered. Unknown names fall back to full so a typo never silently hides the
+// whole surface.
+func (r *Registry) SetProfile(name string) {
+	switch name {
+	case "agent":
+		r.maxTier = Tier1
+	default: // "full", "" -> unlimited
+		r.maxTier = 0
+	}
+}
+
+// effectiveTier maps an unset (0) tier to Tier2, so a tool joins the lean agent
+// surface only by explicitly declaring Tier1.
+func effectiveTier(t int) int {
+	if t == 0 {
+		return Tier2
+	}
+	return t
 }
 
 // SetTracerProvider registers the TracerProvider used for tool tracing spans.
@@ -111,6 +149,12 @@ func (r *Registry) Register(spec ToolSpec) error {
 	}
 	if spec.CLIExempt == ExemptDeferred && spec.ExemptReason == "" {
 		return fmt.Errorf("mcp: tool %q has CLIExempt=ExemptDeferred but no ExemptReason; either supply a reason or pick ExemptInternal/ExemptAgentOnly", spec.Name)
+	}
+	// Profile gate: in a narrowed profile (e.g. "agent") a tool above the cap is
+	// silently not registered - not an error, so callers register the full
+	// catalog unconditionally and the active profile decides what is served.
+	if r.maxTier > 0 && effectiveTier(spec.Tier) > r.maxTier {
+		return nil
 	}
 	r.tools[spec.Name] = spec
 	return nil

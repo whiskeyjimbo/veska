@@ -153,6 +153,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		Name:            "eng_find_symbol",
 		Description:     "Look up nodes by exact symbol name. Use when you already know the identifier (e.g. 'ParseConfig'). " + DescFindSymbolMatching + " Returns a stable node_id you can feed to eng_get_call_chain, eng_get_blast_radius, eng_get_context_pack, eng_search_similar without another lookup. Prefer this over eng_search_semantic for known-identifier queries - it's deterministic and exact.",
 		IncludesStaging: true,
+		Tier:            Tier1,
 		InputSchema:     findSymbolInputSchema,
 		Handler:         makeFindSymbolHandler(graph, staging, cfg.repos, cfg.scans, cfg.reconcile),
 	})
@@ -174,6 +175,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		Name:            "eng_find_implementations",
 		Description:     "Given an interface, returns the concrete types that satisfy it; given a concrete type, returns the interfaces it implements. Direction is inferred from the seed kind, so no direction param is needed. Pass node_id (exact) or symbol (resolved via eng_find_symbol; ambiguity rejected). Backed by IMPLEMENTS edges resolved from Go method sets; edges carry a confidence (Definite/Strong/Probable) reflecting how the methods matched.",
 		IncludesStaging: false,
+		Tier:            Tier1,
 		InputSchema:     findImplementationsInputSchema,
 		Handler:         makeFindImplementationsHandler(graph, cfg.repos, cfg.scans, cfg.reconcile),
 	})
@@ -188,6 +190,7 @@ func RegisterGraphTools(r *Registry, graph ports.GraphReader, staging *staging.A
 		Name:            "eng_trace_path",
 		Description:     "Trace how one symbol reaches another: returns the shortest path(s) from a source to a target over the chosen edge kinds (CALLS by default). Answers \"does this handler ever reach that DB write\" - the directed point-to-point question eng_get_call_chain (flood) and eng_get_blast_radius (closure) cannot. Pass from_node_id/from_symbol and to_node_id/to_symbol; include IMPLEMENTS in edge_kinds to hop interface to implementer. Empty paths with a reason means no route within the depth bound (not an error).",
 		IncludesStaging: false,
+		Tier:            Tier1,
 		InputSchema:     tracePathInputSchema,
 		Handler:         makeTracePathHandler(graph, cfg.repos, cfg.scans, cfg.reconcile),
 	})

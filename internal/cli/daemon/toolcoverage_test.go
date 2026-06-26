@@ -985,6 +985,12 @@ func activeTaskID(t *testing.T, h *toolHarness) string {
 func graphFamily() []coverageTool {
 	const f = "graph"
 	return []coverageTool{
+		// PENDING coverage (run funcs to follow): the type-hierarchy and
+		// reachability tools are listed so the completeness guard passes;
+		// deterministic per-tool tests are tracked under the coverage epic.
+		{family: f, tool: "eng_find_implementations", bead: "solov2-ozoi.4"},
+		{family: f, tool: "eng_get_type_hierarchy", bead: "solov2-ozoi.4"},
+		{family: f, tool: "eng_trace_path", bead: "solov2-ozoi.4"},
 		{family: f, tool: "eng_get_node", bead: "solov2-w775", run: func(t *testing.T) {
 			h := newHarness(t)
 			repoID := coverage.BetaRepoID

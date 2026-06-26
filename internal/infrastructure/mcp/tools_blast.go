@@ -78,6 +78,7 @@ func RegisterBlastTools(r *Registry, svc *blastradius.Service, repoRoot RepoRoot
 		Name:            "eng_get_blast_radius",
 		Description:     DescBlastRadius,
 		IncludesStaging: false,
+		Tier:            Tier1,
 		InputSchema:     blastRadiusInputSchema,
 		Handler:         makeBlastRadiusHandler(svc, repos, graph, cfg.resolve, cfg.resolveInbound, cfg.scans, cfg.reconcile),
 	})

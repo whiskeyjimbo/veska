@@ -15,6 +15,7 @@ func RegisterFindingTools(r *Registry, db *sql.DB, aw ports.AuditWriter, repos a
 		Name:            "eng_close_finding",
 		Description:     "Close a finding by ID. Severity >= high requires a human actor.",
 		IncludesStaging: false,
+		Tier:            Tier1,
 		Handler:         makeCloseFindingHandler(db, aw),
 		InputSchema:     closeFindingInputSchema,
 		OutputSchema:    closeFindingOutputSchema,
@@ -23,6 +24,7 @@ func RegisterFindingTools(r *Registry, db *sql.DB, aw ports.AuditWriter, repos a
 		Name:            "eng_list_findings",
 		Description:     "List findings for a repo and branch, optionally filtered by state or severity.",
 		IncludesStaging: false,
+		Tier:            Tier1,
 		InputSchema:     listFindingsInputSchema,
 		Handler:         makeListFindingsHandler(db, repos),
 	})

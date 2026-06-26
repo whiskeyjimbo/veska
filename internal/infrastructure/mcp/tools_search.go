@@ -125,6 +125,7 @@ func RegisterSearchTools(
 		Name:            "eng_search_semantic",
 		Description:     DescSearchSemantic,
 		IncludesStaging: false,
+		Tier:            Tier1,
 		InputSchema:     searchSemanticInputSchema,
 		Handler:         makeSearchSemanticHandler(svc, rec, repos, pending, cfg.ftsPending, cfg.scans, cfg.reconcile),
 	})
@@ -132,6 +133,7 @@ func RegisterSearchTools(
 		Name:            "eng_search_similar",
 		Description:     "Vector-nearest-neighbor search seeded by an existing symbol's embedding - 'what else looks like this?'. Use after eng_find_symbol or eng_search_semantic when you want to find variants, near-duplicates, or candidate refactor targets. Accepts node_id (exact) or symbol (resolved via FindNodes). Excludes the seed itself from results.",
 		IncludesStaging: false,
+		Tier:            Tier1,
 		InputSchema:     searchSimilarInputSchema,
 		Handler:         makeSearchSimilarHandler(lookup, vectors, nodes, repos, cfg.graph),
 	})

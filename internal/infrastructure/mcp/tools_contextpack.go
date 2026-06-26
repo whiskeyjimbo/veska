@@ -65,6 +65,7 @@ func RegisterContextPackTool(r *Registry, asm *contextpack.Assembler, repoRoot R
 	r.MustRegister(ToolSpec{
 		Name:        "eng_get_context_pack",
 		Description: DescContextPack + " Pass exactly one of node_id, symbol, or task_id as the anchor.",
+		Tier:        Tier1,
 		InputSchema: contextPackInputSchema,
 		Handler:     makeContextPackHandler(asm, repoRoot, repos, cfg.resolve, cfg.resolveInbound, cfg.scans, cfg.reconcile),
 	})

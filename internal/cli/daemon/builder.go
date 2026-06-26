@@ -566,6 +566,13 @@ func parseDurationOr(s string, fallback time.Duration) time.Duration {
 // recorder, registers every tool family, and constructs the MCP socket server.
 func (b *daemonBuilder) buildMCPServer() error {
 	b.registry = mcp.NewRegistry()
+	// Served-surface profile. Default is the FULL catalog (backward compatible)
+	// until the lean Tier1 Core is proven to cut tokens without hurting outcomes
+	// (the A/B re-measure); set VESKA_MCP_PROFILE=agent to opt into the lean
+	// surface now. Profile is applied before the tool families register so
+	// above-tier tools are simply skipped. Flip the default to "agent" once the
+	// re-measure confirms the win.
+	b.registry.SetProfile(os.Getenv("VESKA_MCP_PROFILE"))
 
 	// Savings telemetry is best-effort: a failure to open the JSONL file logs
 	// and continues with recording disabled - never load-bearing for search.

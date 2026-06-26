@@ -403,3 +403,56 @@ func TestRegistry_ToolsReturnsSnapshot(t *testing.T) {
 		t.Errorf("Tools() not sorted by name: %v", []string{out[0].Name, out[1].Name})
 	}
 }
+
+func TestSetProfile_AgentExposesOnlyTier1(t *testing.T) {
+	r := NewRegistry()
+	r.SetProfile("agent")
+
+	core := makeSpec("eng_find_symbol", "tier1 core tool for the agent surface")
+	core.Tier = Tier1
+	if err := r.Register(core); err != nil {
+		t.Fatalf("register tier1: %v", err)
+	}
+	// Untagged (Tier 0 => treated as Tier2) must be skipped under the agent profile,
+	// and skipping is a no-op, not an error.
+	if err := r.Register(makeSpec("eng_get_config", "tier2 opt-in tool, hidden from agent")); err != nil {
+		t.Fatalf("register tier2 should be a silent skip, got: %v", err)
+	}
+
+	got := r.Tools()
+	if len(got) != 1 || got[0].Name != "eng_find_symbol" {
+		t.Fatalf("agent profile: want only [eng_find_symbol], got %v", names(got))
+	}
+}
+
+func TestSetProfile_FullExposesAll(t *testing.T) {
+	r := NewRegistry()
+	r.SetProfile("full")
+
+	core := makeSpec("eng_find_symbol", "tier1 core tool for the agent surface")
+	core.Tier = Tier1
+	r.MustRegister(core)
+	r.MustRegister(makeSpec("eng_get_config", "tier2 opt-in tool, visible under full"))
+
+	if got := r.Tools(); len(got) != 2 {
+		t.Fatalf("full profile: want both tools, got %v", names(got))
+	}
+}
+
+func TestNewRegistry_DefaultsToFull(t *testing.T) {
+	// A bare registry (no SetProfile) must serve every tier so parity/coverage
+	// linters and tests see the complete catalog unchanged.
+	r := NewRegistry()
+	r.MustRegister(makeSpec("eng_get_config", "untagged tier2 tool"))
+	if got := r.Tools(); len(got) != 1 {
+		t.Fatalf("default registry should accept untagged tools, got %v", names(got))
+	}
+}
+
+func names(specs []ToolSpec) []string {
+	out := make([]string, len(specs))
+	for i, s := range specs {
+		out[i] = s.Name
+	}
+	return out
+}

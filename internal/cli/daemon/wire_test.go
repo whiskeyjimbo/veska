@@ -318,8 +318,10 @@ func TestWire_RegistersFinalFiveTools(t *testing.T) {
 	// adds eng_set_repo_alias + eng_remove_repo_alias: 34 → 36.
 	// adds eng_find_clones: 36 → 37.
 	// adds eng_find_clusters: 37 → 38.
-	if got := len(names); got != 38 {
-		t.Errorf("registered tool count = %d; want 38; have=%v", got, names)
+	// adds eng_find_implementations + eng_get_type_hierarchy (type hierarchy): 38 → 40.
+	// adds eng_trace_path (reachability): 40 → 41.
+	if got := len(names); got != 41 {
+		t.Errorf("registered tool count = %d; want 41; have=%v", got, names)
 	}
 	// Negative-check: parked tools must NOT appear.
 	for _, parked := range []string{

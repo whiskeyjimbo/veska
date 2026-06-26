@@ -26,7 +26,7 @@ import (
 func TestToolCoverageCompleteness(t *testing.T) {
 	t.Parallel()
 
-	// Live surface: default (38) + task opt-in (3) = 41 distinct names.
+	// Live surface: default (41) + task opt-in (3) = 44 distinct names.
 	defNames := newHarness(t).Registry().Names()
 	allNames := newHarness(t, WithTaskTools()).Registry().Names()
 
@@ -72,8 +72,8 @@ func TestToolCoverageCompleteness(t *testing.T) {
 		}
 	}
 
-	if got := len(tableSet); got != 41 {
-		t.Errorf("coverage table has %d tools; want 41", got)
+	if got := len(tableSet); got != 44 {
+		t.Errorf("coverage table has %d tools; want 44", got)
 	}
 }
 
