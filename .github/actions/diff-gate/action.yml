@@ -76,6 +76,13 @@ runs:
         sarif_dir="$RUNNER_TEMP/veska-sarif"
         mkdir -p "$sarif_dir"
         echo "sarif_dir=$sarif_dir" >> "$GITHUB_OUTPUT"
+        # Gate-verdict table for the PR comment - a ✅/❌ row per gate (every
+        # gate, not just the failures), assembled here from the loop so veska
+        # never re-runs the gates. The per-symbol detail lives in the SARIF
+        # alerts, so the comment stays a verdict summary + the advisory body.
+        verdicts="$RUNNER_TEMP/veska-verdicts.md"
+        { echo "## Veska diff-gate"; echo ""; echo "| Gate | Result |"; echo "| ---- | ------ |"; } > "$verdicts"
+        echo "verdicts_md=$verdicts" >> "$GITHUB_OUTPUT"
         failed=""
         for g in ${{ inputs.gates }}; do
           echo "::group::diff-gate $g"
@@ -90,9 +97,11 @@ runs:
                --repo-root . \
                --format sarif > "$sarif_dir/$g.sarif" ; then
             echo "PASS: $g"
+            echo "| \`$g\` | ✅ pass |" >> "$verdicts"
           else
             echo "FAIL: $g"
             failed="$failed $g"
+            echo "| \`$g\` | ❌ FAIL |" >> "$verdicts"
           fi
           echo "::endgroup::"
         done
@@ -102,6 +111,23 @@ runs:
           exit 1
         fi
         echo "diff-gate: all gates passed"
+
+    # Advisory report body for the PR comment. Always exit 0 (the report is the
+    # soft on-ramp - it never gates); a hard failure degrades to a placeholder so
+    # the comment step still has a body.
+    - name: Advisory report (markdown)
+      id: report
+      if: always()
+      shell: bash
+      run: |
+        out="$RUNNER_TEMP/veska-report.md"
+        ./bin/veska diff-gate report \
+          --repo "$VESKA_REPO_ID" \
+          --base-ref ${{ inputs.base-sha }} \
+          --candidate-ref ${{ inputs.head-sha }} \
+          --repo-root . \
+          --format markdown > "$out" || echo "_Advisory report unavailable._" > "$out"
+        echo "report_md=$out" >> "$GITHUB_OUTPUT"
 
     # Drop any 0-byte SARIF a hard-erroring gate left behind (it returns before
     # emitting, but the stdout redirect already created the file) - an empty file
@@ -125,3 +151,35 @@ runs:
       with:
         sarif_file: ${{ steps.run.outputs.sarif_dir }}
         category: veska-diff-gate
+
+    # Post the gate verdicts + advisory report as ONE sticky PR comment: find the
+    # prior comment by its hidden marker and edit it, else create. Keeps the PR to
+    # a single, always-current comment instead of one per run. github-script is
+    # first-party (no third-party action dependency). Needs `pull-requests: write`.
+    # Guards: always() (you most want this when gates FAIL, and the gate loop
+    # exit 1s) and the pull_request event (no PR number on push). continue-on-error
+    # so a comment failure never masks the gate's own pass/fail exit.
+    - name: PR comment
+      if: always() && github.event_name == 'pull_request'
+      continue-on-error: true
+      uses: actions/github-script@v7
+      env:
+        VERDICTS_MD: ${{ steps.run.outputs.verdicts_md }}
+        REPORT_MD: ${{ steps.report.outputs.report_md }}
+      with:
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- veska-diff-gate -->';
+          const read = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+          const verdicts = read(process.env.VERDICTS_MD);
+          const report = read(process.env.REPORT_MD);
+          const body = `${marker}\n${verdicts}\n${report}`;
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+          const existing = comments.find(c => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }

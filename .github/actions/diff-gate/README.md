@@ -33,7 +33,7 @@ on:
 permissions:
   contents: read
   security-events: write   # for the SARIF upload (GitHub Security tab)
-  # pull-requests: write   # only once the PR-comment step (i0tx.6) lands
+  pull-requests: write     # for the sticky PR comment (gate verdicts + advisory report)
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -65,8 +65,19 @@ jobs:
 - **Indexes from scratch every run** - no base-graph cache (`i0tx.3.1`) or
   no-embed gate-ready fast path (`i0tx.10`) yet. Fine for small/medium repos;
   slow on large ones until those land.
-- **No PR comment** of the advisory report yet - `i0tx.6`.
 - **Go-only** today.
+
+## PR comment
+
+On a `pull_request` event the action posts ONE sticky comment (found + updated
+by a hidden `<!-- veska-diff-gate -->` marker, so re-runs edit in place rather
+than pile up): a ✅/❌ verdict row per gate plus the advisory `report`
+(blast radius, change-risk, open findings, changed-but-untested). The report is
+rendered with `veska diff-gate report --format markdown` and never gates - it
+always exits 0. Needs `pull-requests: write` (set above); the step is
+best-effort, so a comment failure never masks the gate's pass/fail exit. The
+per-symbol detail lives in the SARIF alerts (Security tab); the comment is a
+verdict summary + the advisory body.
 
 ## SARIF (GitHub Security tab)
 

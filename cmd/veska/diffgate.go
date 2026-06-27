@@ -28,6 +28,16 @@ func validateGateFormat(f string) error {
 	return nil
 }
 
+// validateReportFormat is the advisory report's format gate. The report renders
+// to Markdown (for a PR comment), not SARIF - it carries no gate verdict to map
+// to a code-scanning rule - so its format set differs from the gates'.
+func validateReportFormat(f string) error {
+	if f != "json" && f != "markdown" {
+		return fmt.Errorf("--format must be \"json\" or \"markdown\", got %q", f)
+	}
+	return nil
+}
+
 // diffGateCmd is the CI diff-safety gate: index a candidate
 // change against the indexed-HEAD graph, verify it resolves its target finding
 // within blast radius and introduces no new findings, and emit a machine
@@ -107,6 +117,7 @@ func diffGateReportCmd() *cobra.Command {
 		rootFlag   string
 		baseRef    string
 		candRef    string
+		fmtFlag    string
 	)
 	cmd := &cobra.Command{
 		Use:          "report",
@@ -116,6 +127,9 @@ func diffGateReportCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validateReportFormat(fmtFlag); err != nil {
+				return err
+			}
 			root := rootFlag
 			if root == "" {
 				wd, err := os.Getwd()
@@ -130,6 +144,7 @@ func diffGateReportCmd() *cobra.Command {
 				RepoRoot:     root,
 				BaseRef:      baseRef,
 				CandidateRef: candRef,
+				Format:       fmtFlag,
 				Out:          cmd.OutOrStdout(),
 			})
 		},
@@ -139,6 +154,7 @@ func diffGateReportCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
 	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
 	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
+	cmd.Flags().StringVar(&fmtFlag, "format", "json", "output format: json (default) | markdown (PR comment)")
 	return cmd
 }
 

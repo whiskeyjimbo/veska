@@ -25,6 +25,7 @@ type ReportParams struct {
 	RepoRoot     string
 	BaseRef      string
 	CandidateRef string
+	Format       string // json (default) | markdown
 	Out          io.Writer
 }
 
@@ -69,7 +70,7 @@ func RunReport(ctx context.Context, p ReportParams) error {
 	// exits 0 (the other gates fail closed here; the report must not).
 	if !repoIndexed(ctx, pools.ReadDB, p.RepoID, p.Branch) {
 		report.Notes = append(report.Notes, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
-		return emitReport(p.Out, report)
+		return emitReport(p.Out, p.Format, report)
 	}
 
 	// One canonical changed-files set drives every section's intersection
@@ -77,7 +78,7 @@ func RunReport(ctx context.Context, p ReportParams) error {
 	changedFiles, err := git.ChangedFilesBetween(ctx, p.RepoRoot, p.BaseRef, p.CandidateRef)
 	if err != nil {
 		report.Notes = append(report.Notes, fmt.Sprintf("changed_files: %v", cleanRefError(err, p.BaseRef, p.CandidateRef)))
-		return emitReport(p.Out, report)
+		return emitReport(p.Out, p.Format, report)
 	}
 	report.ChangedFiles = changedFiles
 
@@ -102,7 +103,7 @@ func RunReport(ctx context.Context, p ReportParams) error {
 	// discarding its gating verdict).
 	report.Untested, report.Notes = assembleUntested(ctx, pools, dbPath, edges, nodes, p, report.Notes)
 
-	return emitReport(p.Out, report)
+	return emitReport(p.Out, p.Format, report)
 }
 
 // blastNoiseKinds are node kinds that carry no "downstream impact" signal in the
@@ -249,9 +250,18 @@ func assembleUntested(ctx context.Context, pools *sqlite.Pools, dbPath string, e
 	return verdict.UntestedChanged, notes
 }
 
-// emitReport writes the indented JSON report to out. It always returns nil on a
-// successful encode - the report never signals a gate failure.
-func emitReport(out io.Writer, report diffgate.PRReport) error {
+// emitReport writes the report in the requested format: indented JSON (default)
+// or a Markdown body for a PR comment. It always returns nil on a successful
+// write - the report never signals a gate failure. Every emit site (including
+// the degraded not-indexed and changed-files-error paths) routes through here so
+// Markdown inherits the soft on-ramp (a Notes-only report still renders).
+func emitReport(out io.Writer, format string, report diffgate.PRReport) error {
+	if format == "markdown" {
+		if _, err := io.WriteString(out, diffgate.RenderMarkdown(report)); err != nil {
+			return fmt.Errorf("diff-gate report: write markdown: %w", err)
+		}
+		return nil
+	}
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(report); err != nil {
