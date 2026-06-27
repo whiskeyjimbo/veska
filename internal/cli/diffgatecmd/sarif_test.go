@@ -36,6 +36,9 @@ func assertIngestibleSARIF(t *testing.T, log sarifLog) {
 	if len(run.Tool.Driver.Rules) == 0 {
 		t.Error("driver declares no rules (a PASS run still needs them to clear fixed alerts)")
 	}
+	if run.AutomationDetails.ID == "" {
+		t.Error("run.automationDetails.id is empty (needed for a distinct, stable analysis identity)")
+	}
 	declared := map[string]bool{}
 	for _, r := range run.Tool.Driver.Rules {
 		if r.ID == "" || r.ShortDescription.Text == "" || r.FullDescription.Text == "" {

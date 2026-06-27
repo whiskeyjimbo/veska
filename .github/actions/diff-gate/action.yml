@@ -103,12 +103,21 @@ runs:
         fi
         echo "diff-gate: all gates passed"
 
+    # Drop any 0-byte SARIF a hard-erroring gate left behind (it returns before
+    # emitting, but the stdout redirect already created the file) - an empty file
+    # can make upload-sarif reject the whole batch.
+    - name: Prune empty SARIF
+      if: always()
+      shell: bash
+      run: find "${{ steps.run.outputs.sarif_dir }}" -size 0 -delete || true
+
     # Upload all gate SARIFs in one submission (even on gate FAIL, so the alerts
     # land). Needs `security-events: write` in the calling workflow. A single
-    # upload of the directory carries every gate's run; per-gate driver names keep
-    # their alerts independent. A PASS gate's empty-results SARIF clears its prior
-    # alerts. Best-effort: a missing code-scanning entitlement must not mask the
-    # gate's own pass/fail exit, so this never fails the job.
+    # upload of the directory carries every gate's run; each run's
+    # automationDetails.id (its driver name) keeps the analyses independent, so
+    # they don't collide under the shared category. A PASS gate's empty-results
+    # SARIF clears its prior alerts. Best-effort: a missing code-scanning
+    # entitlement must not mask the gate's own pass/fail exit.
     - name: Upload SARIF
       if: always()
       continue-on-error: true

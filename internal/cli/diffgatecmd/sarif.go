@@ -46,8 +46,18 @@ type sarifLog struct {
 }
 
 type sarifRun struct {
-	Tool    sarifTool     `json:"tool"`
-	Results []sarifResult `json:"results"`
+	Tool sarifTool `json:"tool"`
+	// AutomationDetails.id gives each gate's run an explicit, stable, distinct
+	// analysis identity. GitHub prefers it over the upload-sarif `category`
+	// param, so 5 gate runs submitted together register as 5 independent
+	// analyses (no collision) and a PASS run still clears the prior alert
+	// because the id is stable run-over-run.
+	AutomationDetails sarifAutomationDetails `json:"automationDetails"`
+	Results           []sarifResult          `json:"results"`
+}
+
+type sarifAutomationDetails struct {
+	ID string `json:"id"`
 }
 
 type sarifTool struct {
@@ -202,7 +212,8 @@ func newSarifLog(driverName string, rules []sarifRule, results []sarifResult) sa
 				InformationURI: sarifInformationURI,
 				Rules:          rules,
 			}},
-			Results: results,
+			AutomationDetails: sarifAutomationDetails{ID: driverName},
+			Results:           results,
 		}},
 	}
 }
