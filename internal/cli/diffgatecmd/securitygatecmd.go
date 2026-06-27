@@ -32,6 +32,7 @@ type SecurityParams struct {
 	RepoRoot     string
 	BaseRef      string
 	CandidateRef string
+	Format       string // json (default) | sarif
 	Out          io.Writer
 }
 
@@ -130,7 +131,11 @@ func RunSecurity(ctx context.Context, p SecurityParams) error {
 	}
 
 	rep := securityReport{SecurityVerdict: verdict, Failures: verdict.Failures()}
-	if err := emitSecurityReport(p.Out, rep); err != nil {
+	if p.Format == formatSARIF {
+		if err := emitSarif(p.Out, securitySarifLog(verdict)); err != nil {
+			return err
+		}
+	} else if err := emitSecurityReport(p.Out, rep); err != nil {
 		return err
 	}
 	if !verdict.Pass {

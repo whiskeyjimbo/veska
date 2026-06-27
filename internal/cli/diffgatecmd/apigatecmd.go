@@ -27,6 +27,7 @@ type APIParams struct {
 	RepoRoot     string
 	BaseRef      string
 	CandidateRef string
+	Format       string // json (default) | sarif
 	Out          io.Writer
 }
 
@@ -72,7 +73,7 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 			APIVerdict: diffgate.APIVerdict{Pass: false},
 			Failures:   []string{diffgate.FailRepoNotIndexed},
 		}
-		if err := emitAPIReport(p.Out, rep); err != nil {
+		if err := emitAPI(ctx, p, pools, rep); err != nil {
 			return err
 		}
 		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
@@ -110,13 +111,24 @@ func RunAPIBreak(ctx context.Context, p APIParams) error {
 	verdict := diffgate.NewAPIGate().Evaluate(drifted, baseExported, candExported)
 
 	rep := apiGateReport{APIVerdict: verdict, Failures: verdict.Failures()}
-	if err := emitAPIReport(p.Out, rep); err != nil {
+	if err := emitAPI(ctx, p, pools, rep); err != nil {
 		return err
 	}
 	if !verdict.Pass {
 		return fmt.Errorf("%w (%s)", ErrGateFailed, strings.Join(verdict.Failures(), ","))
 	}
 	return nil
+}
+
+// emitAPI writes the api-gate result in the requested format: the JSON envelope
+// (default) or SARIF. SARIF resolves each changed/removed node's line from the
+// base index for a precise region (file-level fallback on a miss).
+func emitAPI(ctx context.Context, p APIParams, pools *sqlite.Pools, rep apiGateReport) error {
+	if p.Format == formatSARIF {
+		loc := newNodeLocator(ctx, sqlite.NewNodeLookupRepo(pools.ReadDB), p.RepoID, p.Branch, apiNodeIDs(rep.APIVerdict))
+		return emitSarif(p.Out, apiSarifLog(rep.APIVerdict, loc))
+	}
+	return emitAPIReport(p.Out, rep)
 }
 
 // afterStateAPISignals re-promotes the candidate's changed files into a

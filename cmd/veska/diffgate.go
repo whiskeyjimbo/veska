@@ -3,12 +3,30 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/whiskeyjimbo/veska/internal/cli/diffgatecmd"
 )
+
+// addFormatFlag registers the shared --format flag (json|sarif) on a gate
+// subcommand. sarif emits SARIF 2.1.0 for GitHub code-scanning; json (default)
+// is the historical verdict envelope. Only the blocking gate subcommands get
+// this - report and select-tests have their own non-gate output shapes.
+func addFormatFlag(cmd *cobra.Command, dst *string) {
+	cmd.Flags().StringVar(dst, "format", "json", "output format: json (default) | sarif (GitHub code-scanning)")
+}
+
+// validateGateFormat rejects an unrecognized --format value up front, so a typo
+// fails loudly instead of silently falling back to JSON.
+func validateGateFormat(f string) error {
+	if f != "json" && f != "sarif" {
+		return fmt.Errorf("--format must be \"json\" or \"sarif\", got %q", f)
+	}
+	return nil
+}
 
 // diffGateCmd is the CI diff-safety gate: index a candidate
 // change against the indexed-HEAD graph, verify it resolves its target finding
@@ -139,6 +157,7 @@ func diffGateAPICmd() *cobra.Command {
 		rootFlag   string
 		baseRef    string
 		candRef    string
+		fmtFlag    string
 	)
 	cmd := &cobra.Command{
 		Use:          "api",
@@ -148,6 +167,9 @@ func diffGateAPICmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validateGateFormat(fmtFlag); err != nil {
+				return err
+			}
 			root := rootFlag
 			if root == "" {
 				wd, err := os.Getwd()
@@ -162,6 +184,7 @@ func diffGateAPICmd() *cobra.Command {
 				RepoRoot:     root,
 				BaseRef:      baseRef,
 				CandidateRef: candRef,
+				Format:       fmtFlag,
 				Out:          cmd.OutOrStdout(),
 			})
 		},
@@ -171,6 +194,7 @@ func diffGateAPICmd() *cobra.Command {
 	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
 	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
 	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
+	addFormatFlag(cmd, &fmtFlag)
 	return cmd
 }
 
@@ -189,6 +213,7 @@ func diffGateCyclesCmd() *cobra.Command {
 		rootFlag   string
 		baseRef    string
 		candRef    string
+		fmtFlag    string
 	)
 	cmd := &cobra.Command{
 		Use:          "cycles",
@@ -198,6 +223,9 @@ func diffGateCyclesCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validateGateFormat(fmtFlag); err != nil {
+				return err
+			}
 			root := rootFlag
 			if root == "" {
 				wd, err := os.Getwd()
@@ -212,6 +240,7 @@ func diffGateCyclesCmd() *cobra.Command {
 				RepoRoot:     root,
 				BaseRef:      baseRef,
 				CandidateRef: candRef,
+				Format:       fmtFlag,
 				Out:          cmd.OutOrStdout(),
 			})
 		},
@@ -221,6 +250,7 @@ func diffGateCyclesCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
 	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
 	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
+	addFormatFlag(cmd, &fmtFlag)
 	return cmd
 }
 
@@ -326,6 +356,7 @@ func diffGateSecurityCmd() *cobra.Command {
 		rootFlag   string
 		baseRef    string
 		candRef    string
+		fmtFlag    string
 	)
 	cmd := &cobra.Command{
 		Use:          "security",
@@ -335,6 +366,9 @@ func diffGateSecurityCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validateGateFormat(fmtFlag); err != nil {
+				return err
+			}
 			root := rootFlag
 			if root == "" {
 				wd, err := os.Getwd()
@@ -349,6 +383,7 @@ func diffGateSecurityCmd() *cobra.Command {
 				RepoRoot:     root,
 				BaseRef:      baseRef,
 				CandidateRef: candRef,
+				Format:       fmtFlag,
 				Out:          cmd.OutOrStdout(),
 			})
 		},
@@ -358,6 +393,7 @@ func diffGateSecurityCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
 	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
 	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
+	addFormatFlag(cmd, &fmtFlag)
 	return cmd
 }
 
@@ -373,6 +409,7 @@ func diffGateClonesCmd() *cobra.Command {
 		rootFlag   string
 		baseRef    string
 		candRef    string
+		fmtFlag    string
 	)
 	cmd := &cobra.Command{
 		Use:          "clones",
@@ -382,6 +419,9 @@ func diffGateClonesCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validateGateFormat(fmtFlag); err != nil {
+				return err
+			}
 			root := rootFlag
 			if root == "" {
 				wd, err := os.Getwd()
@@ -396,6 +436,7 @@ func diffGateClonesCmd() *cobra.Command {
 				RepoRoot:     root,
 				BaseRef:      baseRef,
 				CandidateRef: candRef,
+				Format:       fmtFlag,
 				Out:          cmd.OutOrStdout(),
 			})
 		},
@@ -405,5 +446,6 @@ func diffGateClonesCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
 	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
 	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
+	addFormatFlag(cmd, &fmtFlag)
 	return cmd
 }

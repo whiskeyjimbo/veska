@@ -27,6 +27,7 @@ type CloneParams struct {
 	RepoRoot     string
 	BaseRef      string
 	CandidateRef string
+	Format       string // json (default) | sarif
 	Out          io.Writer
 }
 
@@ -65,7 +66,7 @@ func RunClones(ctx context.Context, p CloneParams) error {
 			CloneVerdict: diffgate.CloneVerdict{Pass: false, Checked: false},
 			Failures:     []string{diffgate.FailRepoNotIndexed},
 		}
-		if err := emitCloneReport(p.Out, rep); err != nil {
+		if err := emitClones(ctx, p, pools, rep); err != nil {
 			return err
 		}
 		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
@@ -91,13 +92,24 @@ func RunClones(ctx context.Context, p CloneParams) error {
 	}
 
 	rep := cloneGateReport{CloneVerdict: verdict, Failures: verdict.Failures()}
-	if err := emitCloneReport(p.Out, rep); err != nil {
+	if err := emitClones(ctx, p, pools, rep); err != nil {
 		return err
 	}
 	if !verdict.Pass {
 		return fmt.Errorf("%w (%s)", ErrGateFailed, strings.Join(verdict.Failures(), ","))
 	}
 	return nil
+}
+
+// emitClones writes the clone-gate result as the JSON envelope (default) or
+// SARIF. SARIF best-effort resolves each member's line from the base index; a
+// member ADDED by the candidate misses and falls back to its file path.
+func emitClones(ctx context.Context, p CloneParams, pools *sqlite.Pools, rep cloneGateReport) error {
+	if p.Format == formatSARIF {
+		loc := newNodeLocator(ctx, sqlite.NewNodeLookupRepo(pools.ReadDB), p.RepoID, p.Branch, cloneNodeIDs(rep.CloneVerdict))
+		return emitSarif(p.Out, cloneSarifLog(rep.CloneVerdict, loc))
+	}
+	return emitCloneReport(p.Out, rep)
 }
 
 // emitCloneReport writes the indented JSON clone-gate report to out.

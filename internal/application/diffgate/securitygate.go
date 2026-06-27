@@ -56,6 +56,11 @@ type SecurityFinding struct {
 	Rule      string `json:"rule"`
 	FindingID string `json:"finding_id"`
 	Message   string `json:"message"`
+	// FilePath is the repo-relative file the finding anchors to (the leaking
+	// file for a secret, the manifest for a vulnerable dependency), carried for
+	// the SARIF location. Empty when the underlying finding is unanchored. The
+	// matched LINE is not on domain.Finding; it survives only in Message.
+	FilePath string `json:"file_path,omitempty"`
 }
 
 // SecurityInput is the candidate change the gate judges.
@@ -211,7 +216,11 @@ func (g *SecurityGate) scanRef(ctx context.Context, in SecurityInput, path, ref 
 }
 
 func toSecurityFinding(f *domain.Finding) SecurityFinding {
-	return SecurityFinding{Rule: f.Rule, FindingID: f.FindingID, Message: f.Message}
+	sf := SecurityFinding{Rule: f.Rule, FindingID: f.FindingID, Message: f.Message}
+	if f.FilePath != nil {
+		sf.FilePath = *f.FilePath
+	}
+	return sf
 }
 
 func sortFindings(fs []SecurityFinding) {

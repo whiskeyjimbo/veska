@@ -26,6 +26,7 @@ type CycleParams struct {
 	RepoRoot     string
 	BaseRef      string
 	CandidateRef string
+	Format       string // json (default) | sarif
 	Out          io.Writer
 }
 
@@ -73,7 +74,7 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 			CycleVerdict: diffgate.CycleVerdict{Pass: false},
 			Failures:     []string{diffgate.FailRepoNotIndexed},
 		}
-		if err := emitCycleReport(p.Out, rep); err != nil {
+		if err := emitCycles(ctx, p, pools, rep); err != nil {
 			return err
 		}
 		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
@@ -110,13 +111,24 @@ func RunCycles(ctx context.Context, p CycleParams) error {
 	verdict := diffgate.NewCycleGate().Evaluate(after, baseEdges, eph.ChangedNodeIDs(ctx), info)
 
 	rep := cycleGateReport{CycleVerdict: verdict, Failures: verdict.Failures()}
-	if err := emitCycleReport(p.Out, rep); err != nil {
+	if err := emitCycles(ctx, p, pools, rep); err != nil {
 		return err
 	}
 	if !verdict.Pass {
 		return fmt.Errorf("%w (%s)", ErrGateFailed, strings.Join(verdict.Failures(), ","))
 	}
 	return nil
+}
+
+// emitCycles writes the cycle-gate result as the JSON envelope (default) or
+// SARIF. SARIF best-effort resolves each member's line from the base index; a
+// member ADDED by the candidate misses and falls back to its file path.
+func emitCycles(ctx context.Context, p CycleParams, pools *sqlite.Pools, rep cycleGateReport) error {
+	if p.Format == formatSARIF {
+		loc := newNodeLocator(ctx, sqlite.NewNodeLookupRepo(pools.ReadDB), p.RepoID, p.Branch, cycleNodeIDs(rep.CycleVerdict))
+		return emitSarif(p.Out, cycleSarifLog(rep.CycleVerdict, loc))
+	}
+	return emitCycleReport(p.Out, rep)
 }
 
 // cycleEdgeGraphs materializes the after- and base-state dependency graphs for
