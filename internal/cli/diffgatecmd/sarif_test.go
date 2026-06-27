@@ -222,6 +222,33 @@ func TestSecuritySarifLogUnanchoredURIFallback(t *testing.T) {
 	}
 }
 
+func TestUntestedSarifLog(t *testing.T) {
+	v := diffgate.CoverageVerdict{
+		Pass: false,
+		UntestedChanged: []diffgate.UntestedSymbol{
+			{NodeID: "added", Message: "changed symbol DoThing has no test"},
+			{NodeID: "missing", Message: "changed symbol Other has no test"},
+		},
+	}
+	// "added" resolves via the candidate-graph locator (file + line); "missing"
+	// is absent from the locator and must fall back to a "." anchor.
+	loc := nodeLocator{byID: map[string]ports.NodeMeta{
+		"added": {NodeID: "added", FilePath: "pkg/do.go", LineStart: 42},
+	}}
+	log := untestedSarifLog(v, loc)
+	assertIngestibleSARIF(t, log)
+	res := log.Runs[0].Results
+	if len(res) != 2 {
+		t.Fatalf("results = %d, want 2", len(res))
+	}
+	if got := res[0].Locations[0].PhysicalLocation; got.ArtifactLocation.URI != "pkg/do.go" || got.Region.StartLine != 42 {
+		t.Errorf("resolved location = %+v, want pkg/do.go:42", got)
+	}
+	if got := res[1].Locations[0].PhysicalLocation; got.ArtifactLocation.URI != "." || got.Region.StartLine != 1 {
+		t.Errorf("unresolved fallback = %+v, want .:1", got)
+	}
+}
+
 func TestValidFormat(t *testing.T) {
 	for _, f := range []string{formatJSON, formatSARIF} {
 		if !validFormat(f) {

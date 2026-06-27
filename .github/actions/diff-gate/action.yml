@@ -73,14 +73,22 @@ runs:
       shell: bash
       run: |
         set -u
+        sarif_dir="$RUNNER_TEMP/veska-sarif"
+        mkdir -p "$sarif_dir"
+        echo "sarif_dir=$sarif_dir" >> "$GITHUB_OUTPUT"
         failed=""
         for g in ${{ inputs.gates }}; do
           echo "::group::diff-gate $g"
+          # --format sarif writes the SARIF doc to stdout (redirected to a per-gate
+          # file in one dir for a single upload below); the exit code still gates.
+          # Each gate uses its own SARIF driver name, so one upload of N files is N
+          # independent tools in one submission - no cross-gate overwrite.
           if ./bin/veska diff-gate "$g" \
                --repo "$VESKA_REPO_ID" \
                --base-ref ${{ inputs.base-sha }} \
                --candidate-ref ${{ inputs.head-sha }} \
-               --repo-root . ; then
+               --repo-root . \
+               --format sarif > "$sarif_dir/$g.sarif" ; then
             echo "PASS: $g"
           else
             echo "FAIL: $g"
@@ -94,3 +102,17 @@ runs:
           exit 1
         fi
         echo "diff-gate: all gates passed"
+
+    # Upload all gate SARIFs in one submission (even on gate FAIL, so the alerts
+    # land). Needs `security-events: write` in the calling workflow. A single
+    # upload of the directory carries every gate's run; per-gate driver names keep
+    # their alerts independent. A PASS gate's empty-results SARIF clears its prior
+    # alerts. Best-effort: a missing code-scanning entitlement must not mask the
+    # gate's own pass/fail exit, so this never fails the job.
+    - name: Upload SARIF
+      if: always()
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.run.outputs.sarif_dir }}
+        category: veska-diff-gate

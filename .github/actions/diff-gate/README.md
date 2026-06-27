@@ -32,6 +32,7 @@ on:
   pull_request:
 permissions:
   contents: read
+  security-events: write   # for the SARIF upload (GitHub Security tab)
   # pull-requests: write   # only once the PR-comment step (i0tx.6) lands
 jobs:
   gate:
@@ -64,9 +65,25 @@ jobs:
 - **Indexes from scratch every run** - no base-graph cache (`i0tx.3.1`) or
   no-embed gate-ready fast path (`i0tx.10`) yet. Fine for small/medium repos;
   slow on large ones until those land.
-- **No SARIF** (GitHub Security tab) yet - `i0tx.5`.
 - **No PR comment** of the advisory report yet - `i0tx.6`.
 - **Go-only** today.
+
+## SARIF (GitHub Security tab)
+
+Each gate also emits SARIF 2.1.0 (`--format sarif`); the action writes one file
+per gate into a temp dir and uploads them in a single `upload-sarif` submission,
+so gate findings show as code-scanning alerts. Notes:
+
+- Needs `security-events: write` (set above). The upload is best-effort
+  (`continue-on-error`) so a missing code-scanning entitlement never masks the
+  gate's own pass/fail exit.
+- Locations are line-level for `api` / `clones` / `cycles` / `untested` (a newly
+  added symbol the base index can't resolve falls back to a file-level anchor).
+  `security` findings are file-level: a secret anchors to its file and a
+  vulnerable dependency to its manifest; the matched line survives in the alert
+  message text. (True secret line-level is a tracked follow-up.)
+- A PASS gate emits an empty-results SARIF that still declares its rules, so a
+  fixed alert auto-clears on the next run.
 
 ## Validation pass (the next step before shipping)
 

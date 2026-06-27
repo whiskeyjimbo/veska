@@ -265,6 +265,7 @@ func diffGateUntestedCmd() *cobra.Command {
 		rootFlag   string
 		baseRef    string
 		candRef    string
+		fmtFlag    string
 	)
 	cmd := &cobra.Command{
 		Use:          "untested",
@@ -274,6 +275,9 @@ func diffGateUntestedCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validateGateFormat(fmtFlag); err != nil {
+				return err
+			}
 			root := rootFlag
 			if root == "" {
 				wd, err := os.Getwd()
@@ -288,6 +292,7 @@ func diffGateUntestedCmd() *cobra.Command {
 				RepoRoot:     root,
 				BaseRef:      baseRef,
 				CandidateRef: candRef,
+				Format:       fmtFlag,
 				Out:          cmd.OutOrStdout(),
 			})
 		},
@@ -297,6 +302,7 @@ func diffGateUntestedCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rootFlag, "repo-root", "", "repo working dir for git ref reads (default: cwd)")
 	cmd.Flags().StringVar(&baseRef, "base-ref", "", "git ref of the base the candidate is diffed against")
 	cmd.Flags().StringVar(&candRef, "candidate-ref", "", "git ref/worktree of the candidate change")
+	addFormatFlag(cmd, &fmtFlag)
 	return cmd
 }
 

@@ -160,6 +160,13 @@ var sarifRuleCatalog = map[string]sarifRule{
 		FullDescription:  sarifText{Text: "A vulnerability source is configured but the advisory cache was empty or unreadable, so the vuln dimension degraded to unchecked and the gate fails closed."},
 		Help:             sarifText{Text: "Refresh the advisory cache, then re-run the gate."},
 	},
+	diffgate.FailUntestedChanged: {
+		ID:               diffgate.FailUntestedChanged,
+		Name:             "UntestedChangedSymbol",
+		ShortDescription: sarifText{Text: "Changed prod symbol no test reaches"},
+		FullDescription:  sarifText{Text: "The candidate changed or added a production symbol that no test reaches (a CALLS-edge coverage proxy, not real coverage data) - a regression the test bar misses because the code still compiles."},
+		Help:             sarifText{Text: "Add or extend a test that exercises the changed symbol."},
+	},
 }
 
 // rulesFor returns the reporting descriptors for the given rule ids, in the
@@ -248,6 +255,14 @@ func (l nodeLocator) line(nodeID string) (int, bool) {
 	return nm.LineStart, true
 }
 
+// meta returns the full NodeMeta for nodeID. Used by the untested gate, whose
+// verdict carries no FilePath of its own, so the locator (built over the
+// candidate graph) supplies both file and line.
+func (l nodeLocator) meta(nodeID string) (ports.NodeMeta, bool) {
+	nm, ok := l.byID[nodeID]
+	return nm, ok
+}
+
 // physLoc builds a physicalLocation. A line <= 0 (no source line, or an added
 // node the base index can't resolve) becomes a file-level anchor at startLine 1
 // - always valid SARIF, since uri + region.startLine are what code-scanning
@@ -274,6 +289,7 @@ const (
 	driverClones   = "veska-diff-gate/clones"
 	driverCycles   = "veska-diff-gate/cycles"
 	driverSecurity = "veska-diff-gate/security"
+	driverUntested = "veska-diff-gate/untested"
 )
 
 // ---- api ----
@@ -425,4 +441,32 @@ func securityResult(ruleID string, f diffgate.SecurityFinding) sarifResult {
 		Message:   sarifText{Text: f.Message},
 		Locations: at(uri, 1),
 	}
+}
+
+// ---- untested ----
+
+// untestedSarifLog maps a CoverageVerdict to its SARIF log. UntestedSymbol
+// carries only a node_id (no FilePath), and the flagged symbols are often ADDED
+// by the candidate - absent from the base index - so the locator MUST be built
+// over the candidate graph (the re-promoted clone in untestedInChangedFiles),
+// not the base pool. Both uri and line come from that locator's NodeMeta; an
+// unresolved node degrades to a "." file anchor so the result stays valid.
+func untestedSarifLog(v diffgate.CoverageVerdict, loc nodeLocator) sarifLog {
+	results := make([]sarifResult, 0, len(v.UntestedChanged))
+	for _, s := range v.UntestedChanged {
+		uri, line := ".", 0
+		if nm, ok := loc.meta(s.NodeID); ok {
+			if nm.FilePath != "" {
+				uri = nm.FilePath
+			}
+			line = nm.LineStart
+		}
+		results = append(results, sarifResult{
+			RuleID:    diffgate.FailUntestedChanged,
+			Level:     sarifLevelError,
+			Message:   sarifText{Text: s.Message},
+			Locations: at(uri, line),
+		})
+	}
+	return newSarifLog(driverUntested, rulesFor(diffgate.FailUntestedChanged), results)
 }

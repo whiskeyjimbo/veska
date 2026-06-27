@@ -28,6 +28,7 @@ type UntestedParams struct {
 	RepoRoot     string
 	BaseRef      string
 	CandidateRef string
+	Format       string // json (default) | sarif
 	Out          io.Writer
 }
 
@@ -67,7 +68,7 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 			CoverageVerdict: diffgate.CoverageVerdict{Pass: false},
 			Failures:        []string{diffgate.FailRepoNotIndexed},
 		}
-		if err := emitUntestedReport(p.Out, rep); err != nil {
+		if err := emitUntested(p, rep, nodeLocator{}); err != nil {
 			return err
 		}
 		return fmt.Errorf("%w (%s)", ErrGateFailed, notIndexedDetail(ctx, pools.ReadDB, p.RepoID))
@@ -94,7 +95,7 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 	// drift, so the live index is the sound source for the cascade-restoring splice
 	// even when the index has advanced past base-ref (the base clone re-promoted the
 	// changed prod files and cascade-deleted exactly those inbound edges).
-	untested, err := untestedInChangedFiles(ctx, pools, baseClonePath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
+	untested, loc, err := untestedInChangedFiles(ctx, pools, baseClonePath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
 	if err != nil {
 		return fmt.Errorf("diff-gate untested: %w", err)
 	}
@@ -102,13 +103,24 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 	verdict := diffgate.NewCoverageGate().Evaluate(eph.ChangedNodeIDs(ctx), untested)
 
 	rep := untestedReport{CoverageVerdict: verdict, Failures: verdict.Failures()}
-	if err := emitUntestedReport(p.Out, rep); err != nil {
+	if err := emitUntested(p, rep, loc); err != nil {
 		return err
 	}
 	if !verdict.Pass {
 		return fmt.Errorf("%w (%s)", ErrGateFailed, strings.Join(verdict.Failures(), ","))
 	}
 	return nil
+}
+
+// emitUntested writes the coverage-gate result as the JSON envelope (default)
+// or SARIF. The locator is built over the candidate graph (the re-promoted
+// clone), so an untested symbol ADDED by the candidate still resolves to a
+// file + line - the base index can't supply it.
+func emitUntested(p UntestedParams, rep untestedReport, loc nodeLocator) error {
+	if p.Format == formatSARIF {
+		return emitSarif(p.Out, untestedSarifLog(rep.CoverageVerdict, loc))
+	}
+	return emitUntestedReport(p.Out, rep)
 }
 
 // untestedInChangedFiles re-promotes the candidate's changed files into a
@@ -126,20 +138,20 @@ func RunUntested(ctx context.Context, p UntestedParams) error {
 // filter to structuralRules (dead-code, contract-drift), which excludes
 // untested-symbol and would silently drop every finding (a false PASS). The
 // check's in-memory *domain.Finding carry the node_id anchors the gate needs.
-func untestedInChangedFiles(ctx context.Context, basePools *sqlite.Pools, baseDBPath, repoID, branch, gitSHA string, changes []diffgate.FileChange, changedFiles []string) ([]*domain.Finding, error) {
+func untestedInChangedFiles(ctx context.Context, basePools *sqlite.Pools, baseDBPath, repoID, branch, gitSHA string, changes []diffgate.FileChange, changedFiles []string) ([]*domain.Finding, nodeLocator, error) {
 	clone, err := cloneDB(ctx, baseDBPath)
 	if err != nil {
-		return nil, fmt.Errorf("clone base db: %w", err)
+		return nil, nodeLocator{}, fmt.Errorf("clone base db: %w", err)
 	}
 	defer os.Remove(clone)
 	clonePools, err := sqlite.OpenPools(clone)
 	if err != nil {
-		return nil, fmt.Errorf("open clone: %w", err)
+		return nil, nodeLocator{}, fmt.Errorf("open clone: %w", err)
 	}
 	defer clonePools.Close()
 
 	if err := repromoteChanged(ctx, clonePools, repoID, branch, gitSHA, candidateChangedFiles(changes)); err != nil {
-		return nil, fmt.Errorf("re-promote: %w", err)
+		return nil, nodeLocator{}, fmt.Errorf("re-promote: %w", err)
 	}
 
 	changedSet := make(map[string]struct{}, len(changedFiles))
@@ -155,7 +167,30 @@ func untestedInChangedFiles(ctx context.Context, basePools *sqlite.Pools, baseDB
 	// interface suppresses its dispatch-tested impls too.
 	check := checks.NewUntestedSymbolCheck(union,
 		checks.WithUntestedInterfaceMethods(sqlite.NewDeadCodeRepo(clonePools.ReadDB)))
-	return check.Run(ctx, checks.Input{RepoID: repoID, Branch: branch, GitSHA: gitSHA, FilePaths: changedFiles})
+	findings, err := check.Run(ctx, checks.Input{RepoID: repoID, Branch: branch, GitSHA: gitSHA, FilePaths: changedFiles})
+	if err != nil {
+		return nil, nodeLocator{}, err
+	}
+	// Resolve each finding's file + line from the CLONE (the candidate
+	// after-state) while it is still open: an untested symbol the candidate
+	// ADDED is absent from the base index, so only the clone can locate it. The
+	// locator materializes the lookup into an in-memory map, so it survives the
+	// deferred clone Close. Built only for SARIF consumers; the cost is one
+	// batched query over the (small) untested-finding set.
+	loc := newNodeLocator(ctx, sqlite.NewNodeLookupRepo(clonePools.ReadDB), repoID, branch, findingNodeIDs(findings))
+	return findings, loc, nil
+}
+
+// findingNodeIDs collects the node anchors of node-anchored findings (a
+// file-anchored finding has a nil NodeID and is skipped).
+func findingNodeIDs(fs []*domain.Finding) []string {
+	ids := make([]string, 0, len(fs))
+	for _, f := range fs {
+		if f != nil && f.NodeID != nil {
+			ids = append(ids, *f.NodeID)
+		}
+	}
+	return ids
 }
 
 // unionCoverage merges two CoverageQueriers: the candidate after-state node set

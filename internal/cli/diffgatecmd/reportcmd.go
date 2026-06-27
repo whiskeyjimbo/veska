@@ -237,7 +237,9 @@ func assembleUntested(ctx context.Context, pools *sqlite.Pools, dbPath string, e
 	if err != nil {
 		return nil, append(notes, fmt.Sprintf("untested_changed: index candidate: %v", err))
 	}
-	untested, err := untestedInChangedFiles(ctx, pools, dbPath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
+	// The report surfaces the symbols as JSON, not SARIF, so the location
+	// locator is unused here.
+	untested, _, err := untestedInChangedFiles(ctx, pools, dbPath, p.RepoID, p.Branch, p.CandidateRef, changes, eph.ChangedFiles)
 	if err != nil {
 		return nil, append(notes, fmt.Sprintf("untested_changed: %v", err))
 	}
